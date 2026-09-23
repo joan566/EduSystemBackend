@@ -1,0 +1,5 @@
+# Los valores de conexión/secretos se inyectan desde IntegrationTest (@DynamicPropertySource).
+logging:
+  level:
+    root: WARN
+    com.edusistem: INFO
