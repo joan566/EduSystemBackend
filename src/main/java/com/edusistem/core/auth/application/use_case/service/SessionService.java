@@ -9,12 +9,9 @@ import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 /** Emisión y revocación de sesiones (access JWT + refresh token). Debe llamarse dentro de una transacción. */
-@Component
-class SessionService {
+public class SessionService {
 
     private final TokenIssuerPort tokenIssuer;
     private final RefreshTokenRepositoryPort refreshTokens;
@@ -22,8 +19,8 @@ class SessionService {
     private final Clock clock;
     private final long refreshDays;
 
-    SessionService(TokenIssuerPort tokenIssuer, RefreshTokenRepositoryPort refreshTokens, UserRepositoryPort users,
-                   Clock clock, @Value("${edusistem.security.jwt.refresh-expiration-days}") long refreshDays) {
+    public SessionService(TokenIssuerPort tokenIssuer, RefreshTokenRepositoryPort refreshTokens, UserRepositoryPort users,
+                   Clock clock, long refreshDays) {
         this.tokenIssuer = tokenIssuer;
         this.refreshTokens = refreshTokens;
         this.users = users;

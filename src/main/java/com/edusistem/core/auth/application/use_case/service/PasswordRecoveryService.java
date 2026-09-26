@@ -9,6 +9,7 @@ import com.edusistem.core.auth.domain.outputports.MailSenderPort;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.outputports.PasswordResetTokenRepositoryPort;
 import com.edusistem.core.auth.domain.vo.PasswordPolicy;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
@@ -17,11 +18,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class PasswordRecoveryService implements PasswordRecoveryUseCase {
 
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -39,8 +36,8 @@ public class PasswordRecoveryService implements PasswordRecoveryUseCase {
     public PasswordRecoveryService(UserRepositoryPort users, PasswordResetTokenRepositoryPort tokens,
                                    PasswordHasherPort hasher, MailSenderPort mailSender, SessionService sessions,
                                    RecordAuditUseCase audit, Clock clock,
-                                   @Value("${edusistem.password-reset.code-ttl-minutes}") int ttlMinutes,
-                                   @Value("${edusistem.password-reset.max-attempts}") int maxAttempts) {
+                                   int ttlMinutes,
+                                   int maxAttempts) {
         this.users = users;
         this.tokens = tokens;
         this.hasher = hasher;
@@ -53,7 +50,7 @@ public class PasswordRecoveryService implements PasswordRecoveryUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void forgotPassword(AuthCommands.ForgotPassword command) {
         Optional<User> user = users.findByEmail(normalize(command.email())).filter(User::isActive);
         if (user.isEmpty()) {
@@ -67,14 +64,14 @@ public class PasswordRecoveryService implements PasswordRecoveryUseCase {
     }
 
     @Override
-    @Transactional(noRollbackFor = InvalidRequestException.class)
+    @UseCaseTransactional(noRollbackFor = InvalidRequestException.class)
     public void verifyCode(AuthCommands.VerifyResetCode command) {
         requireValidCode(command.email(), command.code());
     }
 
     /** Los intentos fallidos se conservan (noRollbackFor) para poder limitar la fuerza bruta. */
     @Override
-    @Transactional(noRollbackFor = InvalidRequestException.class)
+    @UseCaseTransactional(noRollbackFor = InvalidRequestException.class)
     public void resetPassword(AuthCommands.ResetPassword command) {
         PasswordPolicy.validate(command.newPassword());
         ValidCode valid = requireValidCode(command.email(), command.code());

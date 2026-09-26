@@ -71,7 +71,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /**
  * Importación combinada de la configuración completa de un profesor: 9 hojas, todas opcionales, procesadas en orden
@@ -81,7 +80,6 @@ import org.springframework.stereotype.Service;
  * y se resuelven ("buscar o crear") contra la base de datos a medida que se procesan las hojas en orden. Cada fila
  * se valida antes de aplicarse: una fila o celda incorrecta no aborta el resto de la importación.
  */
-@Service
 public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ImportSchoolSetupService.class);

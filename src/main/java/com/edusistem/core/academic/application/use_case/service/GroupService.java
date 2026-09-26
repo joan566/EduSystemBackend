@@ -8,15 +8,13 @@ import com.edusistem.core.academic.domain.outputports.GroupRepositoryPort;
 import com.edusistem.core.academic.domain.vo.GroupView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class GroupService implements ManageGroupUseCase {
 
     private final GroupRepositoryPort groups;
@@ -33,7 +31,7 @@ public class GroupService implements ManageGroupUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public GroupView create(AcademicCommands.CreateGroup command) {
         grades.findById(command.gradeId()).orElseThrow(() -> ResourceNotFoundException.of("Grade", command.gradeId()));
         String name = command.name().trim();
@@ -45,7 +43,7 @@ public class GroupService implements ManageGroupUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public GroupView update(AcademicCommands.UpdateGroup command) {
         Group group = groups.findById(command.groupId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Group", command.groupId()));
@@ -62,7 +60,7 @@ public class GroupService implements ManageGroupUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long actorId, Long groupId) {
         Group group = groups.findById(groupId).orElseThrow(() -> ResourceNotFoundException.of("Group", groupId));
         if (groups.hasDependents(groupId)) {

@@ -9,9 +9,7 @@ import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import org.springframework.stereotype.Service;
 
-@Service
 public class ImportQueryService implements QueryImportUseCase {
 
     private final ImportBatchRepositoryPort batches;

@@ -11,15 +11,13 @@ import com.edusistem.core.academic.domain.vo.TeachingPeriodView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
 
     private final TeachingPeriodRepositoryPort teachingPeriods;
@@ -39,7 +37,7 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public TeachingPeriodView create(AcademicCommands.CreateTeachingPeriod command) {
         guard.requireTeachingAssignment(command.teacherId(), command.teachingAssignmentId());
         TeachingAssignment assignment = assignments.findById(command.teachingAssignmentId())
@@ -61,7 +59,7 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long teacherId, Long teachingPeriodId) {
         guard.requireTeachingPeriod(teacherId, teachingPeriodId);
         if (teachingPeriods.hasDependents(teachingPeriodId)) {

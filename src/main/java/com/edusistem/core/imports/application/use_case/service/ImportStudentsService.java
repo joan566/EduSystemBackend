@@ -33,7 +33,6 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /**
  * Importación de estudiantes desde Excel. Una fila incorrecta no aborta la importación: se valida todo, se aplican
@@ -41,7 +40,6 @@ import org.springframework.stereotype.Service;
  * Este servicio no es transaccional a propósito: el batch debe poder quedar registrado como FAILED aunque la
  * transacción de aplicación se revierta.
  */
-@Service
 public class ImportStudentsService implements ImportStudentsUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ImportStudentsService.class);

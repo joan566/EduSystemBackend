@@ -6,12 +6,10 @@ import com.edusistem.core.grading.application.use_case.dtos.GradingCommands;
 import com.edusistem.core.grading.domain.entity.GradingScale;
 import com.edusistem.core.grading.domain.inputports.ManageGradingScaleUseCase;
 import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class GradingScaleService implements ManageGradingScaleUseCase {
 
     private final GradingScaleRepositoryPort scales;
@@ -23,7 +21,7 @@ public class GradingScaleService implements ManageGradingScaleUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public GradingScale create(GradingCommands.CreateScale command) {
         GradingScale scale = GradingScale.builder().name(command.name() == null ? null : command.name().trim())
                 .minimumValue(command.minimumValue()).maximumValue(command.maximumValue()).build();

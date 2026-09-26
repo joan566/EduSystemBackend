@@ -11,15 +11,13 @@ import com.edusistem.core.evaluation.domain.outputports.EvaluationCategoryReposi
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.evaluation.domain.vo.EvaluationView;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class EvaluationService implements CreateEvaluationUseCase, QueryEvaluationUseCase {
 
     private final EvaluationRepositoryPort evaluations;
@@ -36,7 +34,7 @@ public class EvaluationService implements CreateEvaluationUseCase, QueryEvaluati
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Evaluation create(EvaluationCommands.Create command) {
         guard.requireTeachingPeriod(command.teacherId(), command.teachingPeriodId());
         EvaluationCategory category = categories.findByName(command.category().name())
@@ -67,7 +65,7 @@ public class EvaluationService implements CreateEvaluationUseCase, QueryEvaluati
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public EvaluationView updateDetails(EvaluationCommands.UpdateDetails command) {
         guard.requireEvaluation(command.teacherId(), command.evaluationId());
         Evaluation evaluation = evaluations.findById(command.evaluationId())

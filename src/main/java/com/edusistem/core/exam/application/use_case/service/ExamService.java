@@ -17,6 +17,7 @@ import com.edusistem.core.exam.domain.outputports.ExamRepositoryPort;
 import com.edusistem.core.exam.domain.vo.ExamDetails;
 import com.edusistem.core.exam.domain.vo.ExamView;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
@@ -26,10 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class ExamService implements ManageExamUseCase {
 
     private final ExamRepositoryPort exams;
@@ -51,7 +49,7 @@ public class ExamService implements ManageExamUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public ExamDetails create(ExamCommands.Create command) {
         guard.requireTeachingPeriod(command.teacherId(), command.teachingPeriodId());
         Exam.validateNumberOfQuestions(command.numberOfQuestions());
@@ -82,7 +80,7 @@ public class ExamService implements ManageExamUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public ExamDetails update(ExamCommands.Update command) {
         ExamContext ctx = loader.load(command.teacherId(), command.examId());
         Evaluation evaluation = ctx.evaluation();
@@ -94,7 +92,7 @@ public class ExamService implements ManageExamUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public ExamDetails replaceQuestions(ExamCommands.ReplaceQuestions command) {
         ExamContext ctx = loader.load(command.teacherId(), command.examId());
         if (exams.hasSubmissions(command.examId())) {
@@ -109,7 +107,7 @@ public class ExamService implements ManageExamUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long teacherId, Long examId) {
         ExamContext ctx = loader.load(teacherId, examId);
         if (exams.hasSubmissions(examId)) {

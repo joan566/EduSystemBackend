@@ -10,17 +10,15 @@ import com.edusistem.core.grading.domain.entity.GradingScale;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
-import org.springframework.stereotype.Component;
 
-@Component
-class SubmissionDetailsAssembler {
+public class SubmissionDetailsAssembler {
 
     private final ExamRepositoryPort exams;
     private final EvaluationRepositoryPort evaluations;
     private final StudentRepositoryPort students;
     private final ExamContextLoader loader;
 
-    SubmissionDetailsAssembler(ExamRepositoryPort exams, EvaluationRepositoryPort evaluations,
+    public SubmissionDetailsAssembler(ExamRepositoryPort exams, EvaluationRepositoryPort evaluations,
                                StudentRepositoryPort students, ExamContextLoader loader) {
         this.exams = exams;
         this.evaluations = evaluations;

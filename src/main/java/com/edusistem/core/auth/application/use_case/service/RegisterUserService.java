@@ -10,16 +10,14 @@ import com.edusistem.core.auth.domain.vo.PasswordPolicy;
 import com.edusistem.core.authorization.domain.entity.Role;
 import com.edusistem.core.authorization.domain.enums.RoleName;
 import com.edusistem.core.authorization.domain.outputports.RoleRepositoryPort;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.util.EnumSet;
 import java.util.Locale;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class RegisterUserService implements RegisterUserUseCase {
 
     private final UserRepositoryPort users;
@@ -38,7 +36,7 @@ public class RegisterUserService implements RegisterUserUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AuthResult register(AuthCommands.Register command) {
         String email = command.email().trim().toLowerCase(Locale.ROOT);
         PasswordPolicy.validate(command.password());

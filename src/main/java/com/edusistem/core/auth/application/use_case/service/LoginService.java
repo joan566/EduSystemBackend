@@ -7,16 +7,14 @@ import com.edusistem.core.auth.application.use_case.dtos.AuthResult;
 import com.edusistem.core.auth.domain.inputports.LoginUseCase;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.outputports.LoginAttemptPort;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.TooManyRequestsException;
 import com.edusistem.core.shared.domain.exceptions.UnauthorizedException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.util.Locale;
 import java.util.Optional;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class LoginService implements LoginUseCase {
 
     private final UserRepositoryPort users;
@@ -35,7 +33,7 @@ public class LoginService implements LoginUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AuthResult login(AuthCommands.Login command) {
         String email = command.email().trim().toLowerCase(Locale.ROOT);
         long retryAfter = attempts.retryAfterSeconds(email, command.clientIp());
@@ -61,7 +59,7 @@ public class LoginService implements LoginUseCase {
 
     /** Revoca todos los JWT y refresh tokens del usuario (cierra la sesión en todos los dispositivos). */
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void logout(Long userId) {
         users.findById(userId).ifPresent(sessions::revokeAll);
         audit.success(userId, AuditAction.LOGOUT, "User", userId, null);

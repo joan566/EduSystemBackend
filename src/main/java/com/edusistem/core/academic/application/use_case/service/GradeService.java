@@ -6,14 +6,12 @@ import com.edusistem.core.academic.domain.inputports.ManageGradeUseCase;
 import com.edusistem.core.academic.domain.outputports.GradeRepositoryPort;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class GradeService implements ManageGradeUseCase {
 
     private final GradeRepositoryPort grades;
@@ -27,7 +25,7 @@ public class GradeService implements ManageGradeUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Grade create(AcademicCommands.CreateGrade command) {
         String name = command.name().trim();
         requireNameAvailable(name, null);
@@ -37,7 +35,7 @@ public class GradeService implements ManageGradeUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Grade update(AcademicCommands.UpdateGrade command) {
         Grade grade = get(command.gradeId());
         if (usage.gradeUsedByOtherTeachers(grade.getId(), command.actorId())) {
@@ -53,7 +51,7 @@ public class GradeService implements ManageGradeUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long actorId, Long gradeId) {
         Grade grade = get(gradeId);
         if (grades.hasGroups(gradeId)) {

@@ -19,6 +19,7 @@ import com.edusistem.core.evaluation.domain.enums.EvaluationCategoryCode;
 import com.edusistem.core.evaluation.domain.inputports.CreateEvaluationUseCase;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
@@ -35,10 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class AttendanceService implements ManageAttendanceUseCase {
 
     private final AttendanceSessionRepositoryPort sessions;
@@ -67,7 +65,7 @@ public class AttendanceService implements ManageAttendanceUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AttendanceSessionView createSession(AttendanceCommands.CreateSession command) {
         if (command.sessionDate() == null) {
             throw new InvalidRequestException("INVALID_SESSION_DATE", "sessionDate is required");
@@ -91,7 +89,7 @@ public class AttendanceService implements ManageAttendanceUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AttendanceSessionDetails recordAttendance(AttendanceCommands.RecordAttendance command) {
         guard.requireAttendanceSession(command.teacherId(), command.sessionId());
         if (command.records() == null || command.records().isEmpty()) {
@@ -128,7 +126,7 @@ public class AttendanceService implements ManageAttendanceUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long teacherId, Long sessionId) {
         guard.requireAttendanceSession(teacherId, sessionId);
         AttendanceSession session = sessions.findById(sessionId)

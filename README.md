@@ -44,8 +44,8 @@ Umbrales del lector de hojas (`application.yml`, `edusistem.omr.*`): `review-con
 ```
 com.edusistem.core.<módulo>
 ├── domain          entity · enums · exceptions · inputports · outputports · vo · service   (POJOs; sin Spring/JPA/HTTP)
-├── application     use_case/dtos (commands) · use_case/service (implementan los input ports; @Transactional solo en escrituras multi-tabla)
-├── infrastructure  entity (@Entity JPA) · repository (Spring Data) · mapper (MapStruct) · adapter (implementan output ports) · config
+├── application     use_case/dtos (commands) · use_case/service (implementan los input ports; Java puro, sin Spring; @UseCaseTransactional solo en escrituras multi-tabla)
+├── infrastructure  entity (@Entity JPA) · repository (Spring Data) · mapper (MapStruct) · adapter (implementan output ports) · config (<Módulo>BeanConfig registra los services de application como beans)
 └── presentation    controllers (delgados) · dtos (request/response con Jakarta Validation)
 ```
 

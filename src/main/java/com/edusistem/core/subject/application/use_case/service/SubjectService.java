@@ -2,6 +2,7 @@ package com.edusistem.core.subject.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
@@ -11,10 +12,7 @@ import com.edusistem.core.subject.application.use_case.dtos.SubjectCommands;
 import com.edusistem.core.subject.domain.entity.Subject;
 import com.edusistem.core.subject.domain.inputports.ManageSubjectUseCase;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class SubjectService implements ManageSubjectUseCase {
 
     private final SubjectRepositoryPort subjects;
@@ -28,7 +26,7 @@ public class SubjectService implements ManageSubjectUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Subject create(SubjectCommands.Create command) {
         String name = command.name().trim();
         requireNameAvailable(name, null);
@@ -38,7 +36,7 @@ public class SubjectService implements ManageSubjectUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Subject update(SubjectCommands.Update command) {
         Subject subject = get(command.subjectId());
         if (usage.subjectUsedByOtherTeachers(subject.getId(), command.actorId())) {
@@ -55,7 +53,7 @@ public class SubjectService implements ManageSubjectUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long actorId, Long subjectId) {
         Subject subject = get(subjectId);
         if (subjects.hasTeachingAssignments(subjectId)) {

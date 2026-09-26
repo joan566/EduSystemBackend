@@ -6,15 +6,13 @@ import com.edusistem.core.academic.domain.inputports.ManageAcademicPeriodUseCase
 import com.edusistem.core.academic.domain.outputports.AcademicPeriodRepositoryPort;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class AcademicPeriodService implements ManageAcademicPeriodUseCase {
 
     private final AcademicPeriodRepositoryPort periods;
@@ -28,7 +26,7 @@ public class AcademicPeriodService implements ManageAcademicPeriodUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AcademicPeriod create(AcademicCommands.SavePeriod command) {
         AcademicPeriod period = AcademicPeriod.builder().name(command.name().trim())
                 .startDate(command.startDate()).endDate(command.endDate()).build();
@@ -39,7 +37,7 @@ public class AcademicPeriodService implements ManageAcademicPeriodUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AcademicPeriod update(AcademicCommands.SavePeriod command) {
         AcademicPeriod period = get(command.periodId());
         if (usage.academicPeriodUsedByOtherTeachers(period.getId(), command.actorId())) {
@@ -56,7 +54,7 @@ public class AcademicPeriodService implements ManageAcademicPeriodUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long actorId, Long periodId) {
         AcademicPeriod period = get(periodId);
         if (periods.hasTeachingPeriods(periodId)) {

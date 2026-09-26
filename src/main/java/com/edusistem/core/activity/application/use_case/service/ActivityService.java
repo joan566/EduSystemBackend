@@ -14,15 +14,13 @@ import com.edusistem.core.evaluation.domain.enums.EvaluationCategoryCode;
 import com.edusistem.core.evaluation.domain.inputports.CreateEvaluationUseCase;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class ActivityService implements ManageActivityUseCase {
 
     private final ActivityRepositoryPort activities;
@@ -44,7 +42,7 @@ public class ActivityService implements ManageActivityUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public ActivityView create(ActivityCommands.Create command) {
         Evaluation evaluation = createEvaluation.create(new EvaluationCommands.Create(command.teacherId(),
                 command.teachingPeriodId(), EvaluationCategoryCode.ACTIVITIES, command.name(), command.description(),
@@ -62,7 +60,7 @@ public class ActivityService implements ManageActivityUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public ActivityView update(ActivityCommands.Update command) {
         guard.requireActivity(command.teacherId(), command.activityId());
         Activity activity = activities.findById(command.activityId())
@@ -88,7 +86,7 @@ public class ActivityService implements ManageActivityUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long teacherId, Long activityId) {
         guard.requireActivity(teacherId, activityId);
         Activity activity = activities.findById(activityId)

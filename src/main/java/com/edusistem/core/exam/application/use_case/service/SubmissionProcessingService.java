@@ -21,6 +21,7 @@ import com.edusistem.core.exam.domain.vo.DetectedAnswer;
 import com.edusistem.core.exam.domain.vo.QrPayload;
 import com.edusistem.core.exam.domain.vo.SubmissionDetails;
 import com.edusistem.core.grading.domain.entity.GradingScale;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.DomainException;
@@ -38,15 +39,12 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Procesa la foto de una hoja. Toda la operación (submission + respuestas + resultado) es una única transacción.
  * Los fallos de lectura de imagen NO propagan excepción: la submission queda FAILED con su motivo, para consulta.
  * Los fallos de identificación (QR ilegible/inválido, examen o estudiante incorrectos) sí se rechazan sin persistir.
  */
-@Service
 public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(SubmissionProcessingService.class);
@@ -80,7 +78,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public SubmissionDetails submit(SubmissionCommands.Submit command) {
         ExamContext ctx = loader.load(command.teacherId(), command.examId());
         Exam exam = ctx.exam();

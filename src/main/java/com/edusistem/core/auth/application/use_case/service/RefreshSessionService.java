@@ -7,15 +7,13 @@ import com.edusistem.core.auth.domain.entity.RefreshToken;
 import com.edusistem.core.auth.domain.inputports.RefreshSessionUseCase;
 import com.edusistem.core.auth.domain.outputports.RefreshTokenRepositoryPort;
 import com.edusistem.core.auth.domain.vo.RefreshTokenCodec;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.UnauthorizedException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class RefreshSessionService implements RefreshSessionUseCase {
 
     private final RefreshTokenRepositoryPort refreshTokens;
@@ -38,7 +36,7 @@ public class RefreshSessionService implements RefreshSessionUseCase {
      * sesiones del usuario. noRollbackFor conserva esa revocación aunque se responda 401.
      */
     @Override
-    @Transactional(noRollbackFor = UnauthorizedException.class)
+    @UseCaseTransactional(noRollbackFor = UnauthorizedException.class)
     public AuthResult refresh(String rawToken) {
         UnauthorizedException invalid = new UnauthorizedException("INVALID_REFRESH_TOKEN", "The refresh token is invalid or has expired");
         RefreshToken token = refreshTokens.findByTokenHash(RefreshTokenCodec.hash(rawToken)).orElseThrow(() -> invalid);

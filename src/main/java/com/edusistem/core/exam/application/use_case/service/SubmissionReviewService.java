@@ -18,6 +18,7 @@ import com.edusistem.core.exam.domain.vo.ImageFile;
 import com.edusistem.core.exam.domain.vo.SubmissionDetails;
 import com.edusistem.core.grading.domain.entity.GradingScale;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
@@ -31,11 +32,8 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Locale;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** Consulta y revisión manual. Toda edición se audita con el valor anterior y el nuevo (trazabilidad). */
-@Service
 public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySubmissionUseCase {
 
     private final ExamContextLoader loader;
@@ -88,7 +86,7 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public SubmissionDetails updateAnswer(SubmissionCommands.UpdateAnswer command) {
         ExamContext ctx = loader.load(command.teacherId(), command.examId());
         ExamSubmission submission = findSubmission(command.examId(), command.submissionId());
@@ -127,7 +125,7 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public SubmissionDetails updateFinalGrade(SubmissionCommands.UpdateFinalGrade command) {
         ExamContext ctx = loader.load(command.teacherId(), command.examId());
         ExamSubmission submission = findSubmission(command.examId(), command.submissionId());

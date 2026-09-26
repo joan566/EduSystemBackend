@@ -9,15 +9,13 @@ import com.edusistem.core.academic.domain.vo.TeachingAssignmentView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class TeachingAssignmentService implements ManageTeachingAssignmentUseCase {
 
     private final TeachingAssignmentRepositoryPort assignments;
@@ -37,7 +35,7 @@ public class TeachingAssignmentService implements ManageTeachingAssignmentUseCas
 
     /** El profesor siempre es el usuario autenticado; solo puede asignarse a sí mismo. */
     @Override
-    @Transactional
+    @UseCaseTransactional
     public TeachingAssignmentView create(AcademicCommands.CreateTeachingAssignment command) {
         groups.findById(command.groupId()).orElseThrow(() -> ResourceNotFoundException.of("Group", command.groupId()));
         subjects.findById(command.subjectId()).orElseThrow(() -> ResourceNotFoundException.of("Subject", command.subjectId()));
@@ -58,7 +56,7 @@ public class TeachingAssignmentService implements ManageTeachingAssignmentUseCas
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public TeachingAssignmentView setActive(Long teacherId, Long assignmentId, boolean active) {
         guard.requireTeachingAssignment(teacherId, assignmentId);
         TeachingAssignment assignment = assignments.findById(assignmentId)
@@ -70,7 +68,7 @@ public class TeachingAssignmentService implements ManageTeachingAssignmentUseCas
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void delete(Long teacherId, Long assignmentId) {
         guard.requireTeachingAssignment(teacherId, assignmentId);
         if (assignments.hasTeachingPeriods(assignmentId)) {

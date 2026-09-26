@@ -15,9 +15,7 @@ import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentGroupRepositoryPort;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.util.List;
-import org.springframework.stereotype.Service;
 
-@Service
 public class AnswerSheetService implements GenerateAnswerSheetUseCase {
 
     private final ExamContextLoader loader;

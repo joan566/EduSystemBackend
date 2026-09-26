@@ -7,14 +7,12 @@ import com.edusistem.core.auth.application.use_case.dtos.AuthResult;
 import com.edusistem.core.auth.domain.inputports.ChangePasswordUseCase;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.vo.PasswordPolicy;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class ChangePasswordService implements ChangePasswordUseCase {
 
     private final UserRepositoryPort users;
@@ -31,7 +29,7 @@ public class ChangePasswordService implements ChangePasswordUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public AuthResult changePassword(AuthCommands.ChangePassword command) {
         User user = users.findById(command.userId())
                 .orElseThrow(() -> ResourceNotFoundException.of("User", command.userId()));

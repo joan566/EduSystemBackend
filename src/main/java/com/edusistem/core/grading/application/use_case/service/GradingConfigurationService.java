@@ -13,14 +13,12 @@ import com.edusistem.core.grading.domain.outputports.GradingConfigurationReposit
 import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
 import com.edusistem.core.grading.domain.vo.GradingConfigurationView;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class GradingConfigurationService implements ConfigureGradingUseCase {
 
     private final GradingConfigurationRepositoryPort configurations;
@@ -42,7 +40,7 @@ public class GradingConfigurationService implements ConfigureGradingUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public GradingConfigurationView save(GradingCommands.SaveConfiguration command) {
         guard.requireTeachingPeriod(command.teacherId(), command.teachingPeriodId());
         GradingScale scale = scales.findById(command.gradingScaleId())

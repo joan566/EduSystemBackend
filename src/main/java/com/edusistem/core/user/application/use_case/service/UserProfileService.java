@@ -2,16 +2,14 @@ package com.edusistem.core.user.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.user.application.use_case.dtos.UpdateProfileCommand;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.inputports.GetCurrentUserUseCase;
 import com.edusistem.core.user.domain.inputports.UpdateProfileUseCase;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class UserProfileService implements GetCurrentUserUseCase, UpdateProfileUseCase {
 
     private final UserRepositoryPort users;
@@ -29,7 +27,7 @@ public class UserProfileService implements GetCurrentUserUseCase, UpdateProfileU
 
     /** Solo nombre y apellido: id, email, roles y estado no son editables desde el perfil. */
     @Override
-    @Transactional
+    @UseCaseTransactional
     public User update(UpdateProfileCommand command) {
         User user = getById(command.userId());
         user.updateProfile(command.firstName(), command.lastName());

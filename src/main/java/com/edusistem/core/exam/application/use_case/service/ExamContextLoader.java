@@ -12,11 +12,9 @@ import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
-import org.springframework.stereotype.Component;
 
 /** Carga un examen verificando ownership y reúne su contexto académico (evaluación y teaching period). */
-@Component
-class ExamContextLoader {
+public class ExamContextLoader {
 
     record ExamContext(Exam exam, Evaluation evaluation, TeachingPeriodView period) {
     }
@@ -28,7 +26,7 @@ class ExamContextLoader {
     private final GradingScaleRepositoryPort scales;
     private final OwnershipGuard guard;
 
-    ExamContextLoader(ExamRepositoryPort exams, EvaluationRepositoryPort evaluations,
+    public ExamContextLoader(ExamRepositoryPort exams, EvaluationRepositoryPort evaluations,
                       TeachingPeriodRepositoryPort teachingPeriods, GradingConfigurationRepositoryPort configurations,
                       GradingScaleRepositoryPort scales, OwnershipGuard guard) {
         this.exams = exams;

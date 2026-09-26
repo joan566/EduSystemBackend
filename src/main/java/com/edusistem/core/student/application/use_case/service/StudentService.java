@@ -3,6 +3,7 @@ package com.edusistem.core.student.application.use_case.service;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
@@ -20,10 +21,7 @@ import com.edusistem.core.student.domain.vo.StudentDetails;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Locale;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class StudentService implements RegisterStudentUseCase, QueryStudentUseCase, WithdrawStudentUseCase {
 
     private final StudentRepositoryPort students;
@@ -45,7 +43,7 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Student create(StudentCommands.Create command) {
         String identification = blankToNull(command.identificationNumber());
         String code = blankToNull(command.studentCode());
@@ -66,7 +64,7 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public Student update(StudentCommands.Update command) {
         Student student = students.findById(command.studentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", command.studentId()));
@@ -77,7 +75,7 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void enroll(StudentCommands.Enroll command) {
         LocalDateTime now = LocalDateTime.now(clock);
         StudentGroup enrollment = studentGroups.find(command.studentId(), command.groupId()).orElse(null);
@@ -91,7 +89,7 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public void withdraw(StudentCommands.Withdraw command) {
         guard.requireStudent(command.teacherId(), command.studentId());
         guard.requireGroup(command.teacherId(), command.groupId());

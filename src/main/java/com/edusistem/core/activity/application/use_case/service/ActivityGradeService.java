@@ -14,6 +14,7 @@ import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
+import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.student.domain.entity.Student;
@@ -28,10 +29,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Service
 public class ActivityGradeService implements GradeActivityUseCase {
 
     private final ActivityRepositoryPort activities;
@@ -60,7 +58,7 @@ public class ActivityGradeService implements GradeActivityUseCase {
     }
 
     @Override
-    @Transactional
+    @UseCaseTransactional
     public List<StudentGradeView> recordGrades(ActivityCommands.RecordGrades command) {
         guard.requireActivity(command.teacherId(), command.activityId());
         if (command.grades() == null || command.grades().isEmpty()) {

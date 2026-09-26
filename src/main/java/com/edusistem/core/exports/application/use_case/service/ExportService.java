@@ -40,13 +40,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.stereotype.Service;
 
 /**
  * Exporta a Excel. Todo dato se obtiene a través del contexto académico del profesor autenticado: nunca se exporta
  * información de un teaching period o grupo que no le pertenece.
  */
-@Service
 public class ExportService implements ExportUseCase {
 
     private static final int PAGE = PageQuery.MAX_SIZE;

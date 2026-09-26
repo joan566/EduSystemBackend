@@ -13,9 +13,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
-@Service
 public class AuditService implements RecordAuditUseCase, ListAuditLogsUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);

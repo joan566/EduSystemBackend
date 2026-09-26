@@ -51,7 +51,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
 /**
  * Importación combinada de un teaching period: hojas Students, Grades y Attendance, todas opcionales. Las columnas
@@ -61,7 +60,6 @@ import org.springframework.stereotype.Service;
  * registran a través de los mismos casos de uso que sus endpoints dedicados (respetan las mismas reglas de negocio:
  * 0 ≤ nota ≤ puntaje máximo, estudiante matriculado en el grupo del periodo).
  */
-@Service
 public class ImportTeachingPeriodDataService implements ImportTeachingPeriodDataUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(ImportTeachingPeriodDataService.class);

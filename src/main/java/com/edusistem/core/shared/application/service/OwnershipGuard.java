@@ -2,13 +2,11 @@ package com.edusistem.core.shared.application.service;
 
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.OwnershipPort;
-import org.springframework.stereotype.Component;
 
 /**
  * Verifica que un recurso pertenezca al profesor autenticado. Si no le pertenece responde como si no existiera
  * (404) para no revelar la existencia de datos de otros profesores.
  */
-@Component
 public class OwnershipGuard {
 
     private final OwnershipPort ownership;
