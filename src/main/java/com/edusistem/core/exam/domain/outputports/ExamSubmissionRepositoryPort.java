@@ -5,6 +5,8 @@ import com.edusistem.core.exam.domain.enums.ExamSubmissionStatus;
 import com.edusistem.core.exam.domain.vo.ExamSubmissionSummary;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface ExamSubmissionRepositoryPort {
@@ -18,4 +20,6 @@ public interface ExamSubmissionRepositoryPort {
     Optional<ExamSubmission> findByExamIdAndStudentId(Long examId, Long studentId);
 
     PageResult<ExamSubmissionSummary> findSummariesByExamId(Long examId, ExamSubmissionStatus status, PageQuery page);
+
+    List<ExamSubmissionSummary> findSummariesByIds(Collection<Long> ids);
 }

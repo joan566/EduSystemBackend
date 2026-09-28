@@ -12,14 +12,18 @@ Requisitos: JDK 21, Maven 3.8+, PostgreSQL 14+ con una base de datos vacía.
 
 ```bash
 createdb edusistem                          # o la base que prefieras
-cp .env.example .env                        # edita credenciales y JWT_SECRET (≥ 32 caracteres)
-set -a; source .env; set +a
+cp .env.example .env                        # edita credenciales y JWT_SECRET (≥ 32 caracteres); Spring lo carga solo
 mvn spring-boot:run                         # Flyway crea el esquema; Hibernate solo lo valida (ddl-auto=validate)
 # Swagger: http://localhost:8080/swagger-ui.html      Salud: http://localhost:8080/actuator/health
 ```
 
 Tests: `mvn clean test` (no requiere PostgreSQL ni Docker: los de integración usan un PostgreSQL embebido).  
 Empaquetado: `mvn clean package` → `target/edusistem-backend-0.1.0.jar` (`java -jar`, con las mismas variables de entorno).
+
+`.env` se lee automáticamente (`spring.config.import` en `application.yml`) cuando la app arranca desde la raíz del
+proyecto; está en `.gitignore` y **nunca** debe subirse. Las variables de entorno reales tienen prioridad sobre `.env`,
+así que en servidores o CI se configuran como variables del sistema/secretos y el archivo no es necesario.
+Los tests no usan `.env`: fijan sus propios valores y siempre desactivan el correo.
 
 ### Variables de entorno
 
@@ -71,8 +75,8 @@ Migraciones Flyway en `src/main/resources/db/migration`:
 | Estudiantes | `GET /students`, `GET /students/{id}`, `POST /students/{studentId}/groups/{groupId}/withdrawal` |
 | Calificación | `/grading-scales` (POST, GET) · `PUT/GET /teaching-periods/{id}/grading-configuration` · `GET /teaching-periods/{id}/period-grades` |
 | Evaluaciones | `GET /evaluation-categories` · `GET /evaluations?teachingPeriodId=` · `GET/PUT /evaluations/{id}` |
-| Exámenes | `POST/GET /exams` · `GET/PUT/DELETE /exams/{id}` · `PUT /exams/{id}/questions` |
-| Hojas | `GET /exams/{id}/answer-sheet/{studentId}` (PDF) · `GET /exams/{id}/answer-sheets` (PDF del grupo) |
+| Exámenes | `POST/GET /exams` · `GET/PUT/DELETE /exams/{id}` · `PUT /exams/{id}/questions` · Word: `POST /exams/import` (multipart `file`, `teachingPeriodId`, `name?`, `description?`, `evaluationDate?`, `maximumScore?`) · `POST /exams/import/preview` · `POST /exams/{id}/questions/import` · `GET /exams/import/template` |
+| Hojas | `GET /exams/{id}/answer-sheet/{studentId}` (PDF) · `GET /exams/{id}/answer-sheets` (PDF del grupo); ambos con `includeQuestions` (por defecto `true`: cada hoja va seguida del cuadernillo de preguntas) · `GET /exams/{id}/question-booklet` (solo el cuadernillo) |
 | Submissions | `POST /exams/{id}/submissions` (multipart `image`, `studentId?`, `replace?`) · `GET /exams/{id}/submissions` · `GET …/{submissionId}` · `GET …/{submissionId}/image` (foto original) · `PUT …/{submissionId}/answers/{questionNumber}` · `PUT …/{submissionId}/final-grade` |
 | Actividades | CRUD `/activities` · `GET/PUT /activities/{id}/grades` · `PUT /activities/{id}/grades/{studentId}` |
 | Asistencia | `/attendance-sessions` (POST, GET, GET id, DELETE) · `PUT /attendance-sessions/{id}/records` |
@@ -84,12 +88,35 @@ Errores: `{timestamp, status, code, message, path[, errors]}` (sin trazas).
 
 ## Cómo funciona la calificación automática
 
-1. **Hoja determinista**: `AnswerSheetLayout` define en puntos PDF (A4) la posición exacta de 4 marcadores de esquina (el de arriba-izquierda, más grande, fija la orientación), del QR y de cada burbuja (hasta 100 preguntas y 6 opciones, en columnas de 25).
+1. **Hoja determinista**: `AnswerSheetLayout` define en puntos PDF (A4) la posición exacta de 4 marcadores de esquina (el de arriba-izquierda, más grande, fija la orientación), del QR y de cada burbuja (hasta 100 preguntas y 6 opciones, repartidas por igual en columnas de hasta 25).
 2. **QR** `EDU1|examId|studentCode`: solo identifica examen y estudiante (sin datos personales). El backend lo valida contra la base: examen existe y es del profesor, estudiante existe, está activo en el grupo del teaching period.
 3. **Lectura** (`AnswerSheetProcessorPort`, implementación Java pura con ZXing): localiza los marcadores → homografía → mide el relleno de cada burbuja frente al nivel de papel local (robusto a sombras, rotación y foto boca abajo).
 4. **Decisión** (`BubbleClassifier`, dominio): una marca clara → `MARKED`; ninguna → `EMPTY` (no se marca incorrecta); varias → `MULTIPLE_MARK` (no se elige una); marca débil/dudosa → `REVIEW_REQUIRED` (se sugiere la candidata). Guarda `detection_confidence`.
 5. **Puntuación bruta** (suma de puntos de correctas) ≠ **nota final** (`GradingScale.convert`: `min + score/máximo × (max−min)`) ≠ **nota del periodo** (`PeriodGradeCalculator`, según `grading_weights`).
 6. **Estados**: `PROCESSED` · `REVIEW_REQUIRED` (hay respuestas por revisar) · `FAILED` (imagen no legible; motivo en `status_detail`). El profesor corrige respuestas o la nota final; cada edición queda en `audit_logs` con valor anterior y nuevo.
+
+## Cuadernillo de preguntas e importación desde Word
+
+* **Cuadernillo** (`QuestionBookletWriter`): enunciados y opciones, nunca la respuesta correcta. Las opciones cortas se
+  colocan en una fila o en dos columnas para ahorrar papel; una pregunta no se parte entre páginas si cabe entera. Usa
+  Liberation Sans embebida (incluida en PDFBox), que cubre tildes, griego y símbolos (π, √, ≤, °, ², ₂…). En el PDF por
+  estudiante o por grupo, cada juego empieza por la hoja de respuestas (la que se fotografía) y le sigue el cuadernillo.
+* **Formato del .docx** (`QuestionDocumentParser`; la plantilla está en `GET /exams/import/template`):
+
+  ```
+  1. Enunciado (puede ocupar varios párrafos)
+  A) Opción
+  B) Opción
+  Respuesta: B
+  Puntos: 2            ← opcional; si falta, el puntaje se reparte por igual
+  ```
+
+  También acepta `1)` o `Pregunta 1:`, opciones `a.` o `A -`, la correcta marcada con `*` (`*B) Corazón`) y las listas
+  automáticas de Word (numeradas para preguntas, con letras para opciones). Lo que hay antes de la pregunta 1 se ignora
+  (título, instrucciones). Afirmaciones como `I.`/`II.` antes de las opciones se quedan en el enunciado. Se leen también
+  los párrafos dentro de tablas. Todos los problemas del documento se devuelven juntos en `errors` (400
+  `INVALID_QUESTION_DOCUMENT`) y no se guarda nada. Solo `.docx` (un `.doc` antiguo responde
+  `UNSUPPORTED_DOCUMENT_FORMAT`); las imágenes y ecuaciones de Word no se importan.
 
 ## Decisiones técnicas relevantes
 

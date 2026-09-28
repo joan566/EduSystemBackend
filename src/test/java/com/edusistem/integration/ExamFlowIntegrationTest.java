@@ -2,6 +2,9 @@ package com.edusistem.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.edusistem.core.exam.domain.inputports.ProcessSubmissionBatchUseCase;
+import com.edusistem.core.exam.domain.inputports.PurgeSubmissionBatchFilesUseCase;
+import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.exam.domain.vo.AnswerSheetData;
 import com.edusistem.core.exam.domain.vo.AnswerSheetLayout;
 import com.edusistem.core.exam.infrastructure.adapter.omr.AnswerSheetProcessorAdapter;
@@ -13,6 +16,8 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +26,7 @@ import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 
 /** Flujo completo: examen → hoja PDF → foto → QR → burbujas → puntuación → nota → revisión manual. */
@@ -31,6 +37,13 @@ class ExamFlowIntegrationTest extends IntegrationTest {
     private static final AnswerSheetLayout LAYOUT = new AnswerSheetLayout(N, 4);
     private static final String CORRECT = "ABCDABCDAB";
     private static final String JPEG = "image/jpeg";
+
+    @Autowired
+    private ProcessSubmissionBatchUseCase batchProcessor;
+    @Autowired
+    private PurgeSubmissionBatchFilesUseCase batchFilePurge;
+    @Autowired
+    private FileStoragePort storage;
 
     record ExamFixture(Teacher teacher, Context context, List<Student> students, long examId) {
     }
@@ -159,18 +172,42 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         assertThat(one.getResponse().getContentType()).isEqualTo("application/pdf");
         assertThat(one.getResponse().getHeader("Content-Disposition")).contains("attachment");
         byte[] pdf = one.getResponse().getContentAsByteArray();
-        assertThat(SheetImages.pageCount(pdf)).isEqualTo(1);
+        assertThat(SheetImages.pageCount(pdf)).isEqualTo(2); // hoja + cuadernillo de preguntas (por defecto)
 
         try (PDDocument doc = Loader.loadPDF(pdf)) {
-            String text = new PDFTextStripper().getText(doc);
-            assertThat(text).contains("HOJA DE RESPUESTAS").contains("Apellido").contains(s.code()).contains("Asignatura");
+            PDFTextStripper stripper = new PDFTextStripper();
+            stripper.setEndPage(1);
+            assertThat(stripper.getText(doc)).contains("HOJA DE RESPUESTAS").contains("Apellido").contains(s.code())
+                    .contains("ASIGNATURA").doesNotContain("CUADERNILLO");
+            stripper.setStartPage(2);
+            stripper.setEndPage(2);
+            assertThat(stripper.getText(doc)).contains("CUADERNILLO DE PREGUNTAS")
+                    .contains("Pregunta 10: ¿cuál es la respuesta?").contains("Opción D");
         }
+        byte[] sheetOnly = download(f.teacher(), "/api/v1/exams/" + f.examId() + "/answer-sheet/" + s.id()
+                + "?includeQuestions=false").getResponse().getContentAsByteArray();
+        assertThat(SheetImages.pageCount(sheetOnly)).isEqualTo(1);
         // el QR contiene solo versión, examen y código de estudiante (sin datos personales)
         String qr = new AnswerSheetProcessorAdapter().readQrCode(SheetImages.png(SheetImages.render(pdf, 0, DPI))).orElseThrow();
         assertThat(qr).isEqualTo("EDU1|" + f.examId() + "|" + s.code());
 
         byte[] group = download(f.teacher(), "/api/v1/exams/" + f.examId() + "/answer-sheets").getResponse().getContentAsByteArray();
-        assertThat(SheetImages.pageCount(group)).isEqualTo(3);
+        assertThat(SheetImages.pageCount(group)).isEqualTo(6); // cada estudiante: hoja + cuadernillo
+        byte[] groupSheets = download(f.teacher(), "/api/v1/exams/" + f.examId() + "/answer-sheets?includeQuestions=false")
+                .getResponse().getContentAsByteArray();
+        assertThat(SheetImages.pageCount(groupSheets)).isEqualTo(3);
+        // cada juego empieza por la hoja del estudiante, con su QR
+        String thirdQr = new AnswerSheetProcessorAdapter().readQrCode(SheetImages.png(SheetImages.render(group, 4, DPI)))
+                .orElseThrow();
+        assertThat(thirdQr).startsWith("EDU1|" + f.examId() + "|");
+
+        MvcResult booklet = download(f.teacher(), "/api/v1/exams/" + f.examId() + "/question-booklet");
+        assertThat(booklet.getResponse().getContentType()).isEqualTo("application/pdf");
+        try (PDDocument doc = Loader.loadPDF(booklet.getResponse().getContentAsByteArray())) {
+            assertThat(doc.getNumberOfPages()).isEqualTo(1);
+            assertThat(new PDFTextStripper().getText(doc)).contains("Pregunta 1: ¿cuál es la respuesta?")
+                    .doesNotContain("HOJA DE RESPUESTAS").doesNotContain(s.code());
+        }
         // un estudiante que no pertenece al grupo no tiene hoja
         Student outsider = importStudents(f.teacher(), newContext(f.teacher()), 1).get(0);
         assertError(parse(download(f.teacher(), "/api/v1/exams/" + f.examId() + "/answer-sheet/" + outsider.id()), 404), 404, "RESOURCE_NOT_FOUND");
@@ -393,6 +430,177 @@ class ExamFlowIntegrationTest extends IntegrationTest {
                 "esto no es una imagen".getBytes(), Map.of()), 400), 400, "INVALID_IMAGE");
         assertError(parse(upload(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions", "image", "x.jpg", JPEG,
                 new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3, 4, 5}, Map.of()), 400), 400, "INVALID_IMAGE");
+    }
+
+    private JsonNode submitBatch(ExamFixture f, byte[] pdf, Map<String, String> params, int status) {
+        return parse(upload(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/batches", "file", "escaneo.pdf",
+                "application/pdf", pdf, params), status);
+    }
+
+    /** Consulta el lote hasta que termina (COMPLETED o FAILED). */
+    private JsonNode awaitBatch(ExamFixture f, long batchId) {
+        String url = "/api/v1/exams/" + f.examId() + "/submissions/batches/" + batchId;
+        long deadline = System.currentTimeMillis() + 120_000;
+        while (true) {
+            JsonNode result = get(f.teacher(), url, 200);
+            String status = result.get("batch").get("status").asText();
+            if (status.equals("COMPLETED") || status.equals("FAILED")) {
+                return result;
+            }
+            assertThat(System.currentTimeMillis()).as("batch %d still %s", batchId, status).isLessThan(deadline);
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    }
+
+    private JsonNode runBatch(ExamFixture f, byte[] pdf, Map<String, String> params) {
+        JsonNode accepted = submitBatch(f, pdf, params, 202);
+        return awaitBatch(f, accepted.get("id").asLong());
+    }
+
+    /** Hoja de s0 correcta, cuadernillo, hoja de s1 con 8/10 y s0 repetido. */
+    private byte[] scannedGroup(ExamFixture f) {
+        Student s0 = f.students().get(0);
+        BufferedImage booklet = SheetImages.render(sheetPdf(f.teacher(), f.examId(), s0), 1, DPI);
+        return SheetImages.scannedPdf(DPI,
+                answeredSheet(f, s0, correctChoices()),
+                booklet,
+                answeredSheet(f, f.students().get(1), correctExcept(3, 7)),
+                answeredSheet(f, s0, correctExcept(1)));
+    }
+
+    @Test
+    void scannedPdfIsGradedInTheBackgroundPageByPage() {
+        ExamFixture f = fixture();
+        Student s0 = f.students().get(0);
+        Student s1 = f.students().get(1);
+        byte[] pdf = scannedGroup(f);
+
+        JsonNode accepted = submitBatch(f, pdf, Map.of(), 202);
+        assertThat(accepted.get("status").asText()).isIn("QUEUED", "PROCESSING", "COMPLETED");
+        assertThat(accepted.get("totalPages").asInt()).isEqualTo(4);
+        assertThat(accepted.get("fileName").asText()).isEqualTo("escaneo.pdf");
+
+        JsonNode result = awaitBatch(f, accepted.get("id").asLong());
+        JsonNode batch = result.get("batch");
+        assertThat(batch.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(batch.get("processedPages").asInt()).isEqualTo(4);
+        assertThat(batch.get("progressPercent").asInt()).isEqualTo(100);
+        assertThat(batch.get("completedAt").isNull()).isFalse();
+
+        JsonNode pages = result.get("pages");
+        assertThat(pages.size()).isEqualTo(4);
+        assertThat(pages.get(0).get("outcome").asText()).isEqualTo("PROCESSED");
+        assertThat(pages.get(0).get("submission").get("studentCode").asText()).isEqualTo(s0.code());
+        assertThat(pages.get(0).get("submission").get("finalGrade").decimalValue()).isEqualByComparingTo("5.00");
+        assertThat(pages.get(1).get("outcome").asText()).isEqualTo("SKIPPED");
+        assertThat(pages.get(1).get("submission").isNull()).isTrue();
+        assertThat(pages.get(2).get("outcome").asText()).isEqualTo("PROCESSED");
+        assertThat(pages.get(2).get("submission").get("studentCode").asText()).isEqualTo(s1.code());
+        assertThat(pages.get(2).get("submission").get("score").decimalValue()).isEqualByComparingTo("4.00");
+        assertThat(pages.get(3).get("outcome").asText()).isEqualTo("REJECTED");
+        assertThat(pages.get(3).get("errorCode").asText()).isEqualTo("DUPLICATE_IN_BATCH");
+
+        JsonNode results = result.get("results");
+        assertThat(results.get("processed").asInt()).isEqualTo(2);
+        assertThat(results.get("skipped").asInt()).isEqualTo(1);
+        assertThat(results.get("rejected").asInt()).isEqualTo(1);
+        assertThat(results.get("graded").asInt()).isEqualTo(2);
+        assertThat(results.get("averageFinalGrade").decimalValue()).isEqualByComparingTo("4.50");
+        assertThat(results.get("highestFinalGrade").decimalValue()).isEqualByComparingTo("5.00");
+        assertThat(results.get("lowestFinalGrade").decimalValue()).isEqualByComparingTo("4.00");
+
+        // cada página es una submission normal, con su imagen para revisión; el duplicado no pisó la primera
+        long s0Submission = pages.get(0).get("submission").get("id").asLong();
+        assertThat(get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/" + s0Submission, 200)
+                .get("hasImage").asBoolean()).isTrue();
+        assertThat(jdbc.queryForObject("select score from exam_submissions where id = ?", java.math.BigDecimal.class,
+                s0Submission)).isEqualByComparingTo("5.00");
+
+        // las notas del lote reflejan las correcciones manuales posteriores
+        put(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/" + s0Submission + "/final-grade",
+                Map.of("finalGrade", 3, "reason", "ajuste"), 200);
+        JsonNode updated = get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/batches/"
+                + accepted.get("id").asLong(), 200);
+        assertThat(updated.get("results").get("averageFinalGrade").decimalValue()).isEqualByComparingTo("3.50");
+
+        // volver a subir el mismo escaneo no reemplaza nada salvo con replace=true
+        JsonNode again = runBatch(f, pdf, Map.of());
+        assertThat(again.get("pages").get(0).get("errorCode").asText()).isEqualTo("SUBMISSION_ALREADY_EXISTS");
+        assertThat(again.get("results").get("graded").asInt()).isZero();
+        assertThat(runBatch(f, pdf, Map.of("replace", "true")).get("results").get("processed").asInt()).isEqualTo(2);
+
+        JsonNode list = get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/batches", 200);
+        assertThat(list.size()).isEqualTo(3);
+        assertThat(list.get(0).get("replaceExisting").asBoolean()).isTrue(); // más reciente primero
+    }
+
+    @Test
+    void interruptedBatchIsResumedFromTheFirstPendingPage() {
+        ExamFixture f = fixture();
+        JsonNode done = runBatch(f, scannedGroup(f), Map.of());
+        long batchId = done.get("batch").get("id").asLong();
+        long s1Submission = done.get("pages").get(2).get("submission").get("id").asLong();
+
+        // simula un reinicio a mitad: 2 páginas registradas, y el contador se cortó antes de pasar a 2
+        jdbc.update("delete from exam_submission_batch_pages where batch_id = ? and page_number > 2", batchId);
+        jdbc.update("delete from exam_answers where submission_id = ?", s1Submission);
+        jdbc.update("delete from exam_submissions where id = ?", s1Submission);
+        jdbc.update("update exam_submission_batches set status = 'PROCESSING', processed_pages = 1, completed_at = null "
+                + "where id = ?", batchId);
+
+        batchProcessor.resumeUnfinished();
+        JsonNode resumed = awaitBatch(f, batchId);
+        assertThat(resumed.get("batch").get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(resumed.get("pages").size()).isEqualTo(4); // reanuda en la página 3, no repite la 2
+        assertThat(resumed.get("batch").get("processedPages").asInt()).isEqualTo(4);
+        assertThat(resumed.get("pages").get(2).get("outcome").asText()).isEqualTo("PROCESSED");
+        // el duplicado se sigue detectando con las páginas ya guardadas antes del reinicio
+        assertThat(resumed.get("pages").get(3).get("errorCode").asText()).isEqualTo("DUPLICATE_IN_BATCH");
+    }
+
+    @Test
+    void scannedPdfIsDeletedAfterTheRetentionPeriodButResultsAreKept() throws IOException {
+        ExamFixture f = fixture();
+        byte[] pdf = SheetImages.scannedPdf(DPI, answeredSheet(f, f.students().get(0), correctChoices()));
+        long oldBatch = runBatch(f, pdf, Map.of()).get("batch").get("id").asLong();
+        long recentBatch = runBatch(f, pdf, Map.of("replace", "true")).get("batch").get("id").asLong();
+        String oldPath = jdbc.queryForObject("select file_path from exam_submission_batches where id = ?", String.class, oldBatch);
+        assertThat(storage.exists(oldPath)).isTrue();
+        jdbc.update("update exam_submission_batches set completed_at = now() - interval '40 days' where id = ?", oldBatch);
+
+        assertThat(batchFilePurge.purgeFilesCompletedBefore(LocalDateTime.now(ZoneOffset.UTC).minusDays(30))).isEqualTo(1);
+
+        assertThat(storage.exists(oldPath)).isFalse();
+        JsonNode purged = get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/batches/" + oldBatch, 200);
+        assertThat(purged.get("batch").get("filePurgedAt").isNull()).isFalse();
+        assertThat(purged.get("pages").get(0).get("outcome").asText()).isEqualTo("PROCESSED"); // resultados intactos
+        assertThat(jdbc.queryForObject("select file_path from exam_submission_batches where id = ?", String.class,
+                recentBatch)).isNotNull();
+        // idempotente
+        assertThat(batchFilePurge.purgeFilesCompletedBefore(LocalDateTime.now(ZoneOffset.UTC).minusDays(30))).isZero();
+    }
+
+    @Test
+    void batchRejectsInvalidFilesAndOtherTeachersSynchronously() {
+        ExamFixture f = fixture();
+        assertError(submitBatch(f, "no es un pdf".getBytes(), Map.of(), 400), 400, "INVALID_PDF");
+        assertError(submitBatch(f, "%PDF-1.7 roto".getBytes(), Map.of(), 400), 400, "INVALID_PDF");
+        byte[] pdf = SheetImages.scannedPdf(DPI, answeredSheet(f, f.students().get(0), correctChoices()));
+        Teacher other = newTeacher();
+        assertError(parse(upload(other, "/api/v1/exams/" + f.examId() + "/submissions/batches", "file", "x.pdf",
+                "application/pdf", pdf, Map.of()), 404), 404, "RESOURCE_NOT_FOUND");
+        long batchId = submitBatch(f, pdf, Map.of(), 202).get("id").asLong();
+        assertError(get(other, "/api/v1/exams/" + f.examId() + "/submissions/batches/" + batchId, 404), 404,
+                "RESOURCE_NOT_FOUND");
+        assertError(get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/batches/999999", 404), 404,
+                "RESOURCE_NOT_FOUND");
+        assertThat(jdbc.queryForObject("select count(*) from exam_submission_batches where exam_id = ?", Integer.class,
+                f.examId())).isEqualTo(1);
+        awaitBatch(f, batchId);
     }
 
     @Test

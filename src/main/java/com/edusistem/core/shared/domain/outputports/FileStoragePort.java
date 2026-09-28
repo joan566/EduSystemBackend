@@ -10,4 +10,7 @@ public interface FileStoragePort {
     byte[] read(String relativePath) throws IOException;
 
     boolean exists(String relativePath);
+
+    /** Borra el archivo si existe. */
+    void delete(String relativePath) throws IOException;
 }

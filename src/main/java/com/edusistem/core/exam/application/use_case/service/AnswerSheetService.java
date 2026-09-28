@@ -9,6 +9,7 @@ import com.edusistem.core.exam.domain.vo.AnswerSheetData;
 import com.edusistem.core.exam.domain.vo.AnswerSheetLayout;
 import com.edusistem.core.exam.domain.vo.PdfDocument;
 import com.edusistem.core.exam.domain.vo.QrPayload;
+import com.edusistem.core.exam.domain.vo.QuestionBookletData;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.student.domain.entity.Student;
@@ -35,27 +36,36 @@ public class AnswerSheetService implements GenerateAnswerSheetUseCase {
     }
 
     @Override
-    public PdfDocument forStudent(Long teacherId, Long examId, Long studentId) {
+    public PdfDocument forStudent(Long teacherId, Long examId, Long studentId, boolean includeQuestions) {
         ExamContext ctx = readyContext(teacherId, examId);
         Student student = students.findById(studentId).orElseThrow(() -> ResourceNotFoundException.of("Student", studentId));
         if (!studentGroups.existsActive(studentId, ctx.period().groupId())) {
             throw ResourceNotFoundException.of("Student", studentId);
         }
-        byte[] pdf = renderer.render(List.of(sheetFor(ctx, student)));
+        byte[] pdf = renderer.render(List.of(sheetFor(ctx, student)), includeQuestions ? bookletFor(ctx) : null);
         audit.success(teacherId, AuditAction.EXPORT, "AnswerSheet", examId, "student " + student.getStudentCode());
         return new PdfDocument("answer-sheet-exam" + examId + "-" + student.getStudentCode() + ".pdf", pdf);
     }
 
     @Override
-    public PdfDocument forGroup(Long teacherId, Long examId) {
+    public PdfDocument forGroup(Long teacherId, Long examId, boolean includeQuestions) {
         ExamContext ctx = readyContext(teacherId, examId);
         List<Student> groupStudents = students.findActiveByGroupId(ctx.period().groupId());
         if (groupStudents.isEmpty()) {
             throw new BusinessRuleException("GROUP_HAS_NO_STUDENTS", "The group has no active students");
         }
-        byte[] pdf = renderer.render(groupStudents.stream().map(s -> sheetFor(ctx, s)).toList());
+        byte[] pdf = renderer.render(groupStudents.stream().map(s -> sheetFor(ctx, s)).toList(),
+                includeQuestions ? bookletFor(ctx) : null);
         audit.success(teacherId, AuditAction.EXPORT, "AnswerSheet", examId, groupStudents.size() + " sheets");
         return new PdfDocument("answer-sheets-exam" + examId + ".pdf", pdf);
+    }
+
+    @Override
+    public PdfDocument questionBooklet(Long teacherId, Long examId) {
+        ExamContext ctx = readyContext(teacherId, examId);
+        byte[] pdf = renderer.renderBooklet(bookletFor(ctx));
+        audit.success(teacherId, AuditAction.EXPORT, "QuestionBooklet", examId, ctx.evaluation().getName());
+        return new PdfDocument("questions-exam" + examId + ".pdf", pdf);
     }
 
     private ExamContext readyContext(Long teacherId, Long examId) {
@@ -64,6 +74,12 @@ public class AnswerSheetService implements GenerateAnswerSheetUseCase {
             throw new BusinessRuleException("EXAM_NOT_READY", "Define all the exam questions before generating answer sheets");
         }
         return ctx;
+    }
+
+    private static QuestionBookletData bookletFor(ExamContext ctx) {
+        var period = ctx.period();
+        return new QuestionBookletData(ctx.evaluation().getName(), period.subjectName(),
+                period.gradeName() + " " + period.groupName(), ctx.exam().getQuestions());
     }
 
     private AnswerSheetData sheetFor(ExamContext ctx, Student student) {

@@ -55,7 +55,11 @@ public class GlobalExceptionHandler {
             default -> HttpStatus.BAD_REQUEST;
         };
         log.debug("Domain exception {} at {}: {}", ex.getCode(), request.getRequestURI(), ex.getMessage());
-        return build(status, ex.getCode(), ex.getMessage(), request, null);
+        List<ErrorResponse.FieldError> errors = ex instanceof InvalidRequestException invalid
+                && !invalid.getDetails().isEmpty()
+                ? invalid.getDetails().stream().map(d -> new ErrorResponse.FieldError(d.field(), d.message())).toList()
+                : null;
+        return build(status, ex.getCode(), ex.getMessage(), request, errors);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -63,6 +63,9 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.username", TestPostgres::username);
         registry.add("spring.datasource.password", TestPostgres::password);
         registry.add("edusistem.security.jwt.secret", () -> "test-secret-test-secret-test-secret-1234");
+        // aíslan los tests del .env local del desarrollador (p. ej. MAIL_ENABLED=true enviaría correos reales)
+        registry.add("edusistem.mail.enabled", () -> "false");
+        registry.add("edusistem.security.jwt.expiration-seconds", () -> "3600");
         registry.add("edusistem.cors.allowed-origins", () -> "http://localhost:3000,https://*.edusistem.test");
         Path storage = Files.createTempDirectory("edusistem-test-storage");
         registry.add("edusistem.storage.base-path", storage::toString);

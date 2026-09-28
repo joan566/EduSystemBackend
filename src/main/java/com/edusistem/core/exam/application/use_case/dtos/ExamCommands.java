@@ -28,4 +28,12 @@ public final class ExamCommands {
 
     public record ReplaceQuestions(Long teacherId, Long examId, List<QuestionInput> questions) {
     }
+
+    /** Crea el examen con las preguntas del documento; {@code maximumScore} es opcional como en {@link Create}. */
+    public record CreateFromDocument(Long teacherId, Long teachingPeriodId, String name, String description,
+                                     LocalDateTime evaluationDate, BigDecimal maximumScore, byte[] content) {
+    }
+
+    public record ReplaceQuestionsFromDocument(Long teacherId, Long examId, byte[] content) {
+    }
 }

@@ -5,15 +5,26 @@ import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.evaluation.domain.inputports.CreateEvaluationUseCase;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.exam.application.use_case.service.AnswerSheetService;
+import com.edusistem.core.exam.application.use_case.service.SubmissionBatchPageRecorder;
+import com.edusistem.core.exam.application.use_case.service.SubmissionBatchService;
+import com.edusistem.core.exam.application.use_case.service.SubmissionBatchWorker;
 import com.edusistem.core.exam.application.use_case.service.ExamContextLoader;
+import com.edusistem.core.exam.application.use_case.service.ExamDocumentImportService;
 import com.edusistem.core.exam.application.use_case.service.ExamService;
 import com.edusistem.core.exam.application.use_case.service.SubmissionDetailsAssembler;
 import com.edusistem.core.exam.application.use_case.service.SubmissionProcessingService;
 import com.edusistem.core.exam.application.use_case.service.SubmissionReviewService;
+import com.edusistem.core.exam.domain.inputports.ManageExamUseCase;
+import com.edusistem.core.exam.domain.inputports.ProcessSubmissionBatchUseCase;
+import com.edusistem.core.exam.domain.inputports.SubmitAnswerSheetUseCase;
 import com.edusistem.core.exam.domain.outputports.AnswerSheetProcessorPort;
 import com.edusistem.core.exam.domain.outputports.AnswerSheetRendererPort;
+import com.edusistem.core.exam.domain.outputports.BackgroundTaskPort;
 import com.edusistem.core.exam.domain.outputports.ExamRepositoryPort;
 import com.edusistem.core.exam.domain.outputports.ExamSubmissionRepositoryPort;
+import com.edusistem.core.exam.domain.outputports.QuestionDocumentPort;
+import com.edusistem.core.exam.domain.outputports.ScannedPdfPort;
+import com.edusistem.core.exam.domain.outputports.SubmissionBatchRepositoryPort;
 import com.edusistem.core.exam.domain.service.BubbleClassifier;
 import com.edusistem.core.grading.domain.outputports.GradingConfigurationRepositoryPort;
 import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
@@ -59,6 +70,11 @@ public class ExamBeanConfig {
     }
 
     @Bean
+    ExamDocumentImportService examDocumentImportService(QuestionDocumentPort documents, ManageExamUseCase exams) {
+        return new ExamDocumentImportService(documents, exams);
+    }
+
+    @Bean
     SubmissionProcessingService submissionProcessingService(ExamContextLoader loader,
                                                             AnswerSheetProcessorPort processor,
                                                             ExamSubmissionRepositoryPort submissions,
@@ -69,6 +85,30 @@ public class ExamBeanConfig {
                                                             RecordAuditUseCase audit, Clock clock) {
         return new SubmissionProcessingService(loader, processor, submissions, students, studentGroups, storage,
                                                classifier, assembler, audit, clock);
+    }
+
+    @Bean
+    SubmissionBatchPageRecorder submissionBatchPageRecorder(SubmitAnswerSheetUseCase single,
+                                                            SubmissionBatchRepositoryPort batches) {
+        return new SubmissionBatchPageRecorder(single, batches);
+    }
+
+    @Bean
+    SubmissionBatchWorker submissionBatchWorker(SubmissionBatchRepositoryPort batches, ExamContextLoader loader,
+                                                SubmissionBatchPageRecorder recorder,
+                                                AnswerSheetProcessorPort processor, ScannedPdfPort scannedPdf,
+                                                FileStoragePort storage, BackgroundTaskPort background, Clock clock) {
+        return new SubmissionBatchWorker(batches, loader, recorder, processor, scannedPdf, storage, background, clock);
+    }
+
+    @Bean
+    SubmissionBatchService submissionBatchService(ExamContextLoader loader, SubmissionBatchRepositoryPort batches,
+                                                  ExamSubmissionRepositoryPort submissions, ScannedPdfPort scannedPdf,
+                                                  FileStoragePort storage, BackgroundTaskPort background,
+                                                  ProcessSubmissionBatchUseCase worker, OwnershipGuard guard,
+                                                  Clock clock) {
+        return new SubmissionBatchService(loader, batches, submissions, scannedPdf, storage, background, worker, guard,
+                                          clock);
     }
 
     @Bean

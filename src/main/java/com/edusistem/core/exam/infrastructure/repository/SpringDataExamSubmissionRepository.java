@@ -3,6 +3,8 @@ package com.edusistem.core.exam.infrastructure.repository;
 import com.edusistem.core.exam.domain.enums.ExamSubmissionStatus;
 import com.edusistem.core.exam.domain.vo.ExamSubmissionSummary;
 import com.edusistem.core.exam.infrastructure.entity.ExamSubmissionEntity;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,4 +30,12 @@ public interface SpringDataExamSubmissionRepository extends JpaRepository<ExamSu
                     where s.examId = :examId and (:status is null or s.status = :status)""")
     Page<ExamSubmissionSummary> findSummaries(@Param("examId") Long examId,
                                               @Param("status") ExamSubmissionStatus status, Pageable pageable);
+
+    @Query("""
+            select new com.edusistem.core.exam.domain.vo.ExamSubmissionSummary(s.id, s.studentId, s.studentCode,
+                concat(st.lastName, ' ', st.firstName), s.status, s.score, s.finalGrade, s.statusDetail,
+                s.submittedAt, s.processedAt)
+            from ExamSubmissionEntity s join StudentEntity st on st.id = s.studentId
+            where s.id in :ids""")
+    List<ExamSubmissionSummary> findSummariesByIds(@Param("ids") Collection<Long> ids);
 }

@@ -2,9 +2,13 @@ package com.edusistem.core.exam.presentation.controllers;
 
 import com.edusistem.core.exam.application.use_case.dtos.SubmissionCommands;
 import com.edusistem.core.exam.domain.enums.ExamSubmissionStatus;
+import com.edusistem.core.exam.domain.inputports.QuerySubmissionBatchUseCase;
 import com.edusistem.core.exam.domain.inputports.QuerySubmissionUseCase;
 import com.edusistem.core.exam.domain.inputports.ReviewSubmissionUseCase;
+import com.edusistem.core.exam.domain.inputports.SubmitAnswerSheetBatchUseCase;
 import com.edusistem.core.exam.domain.inputports.SubmitAnswerSheetUseCase;
+import com.edusistem.core.exam.presentation.dtos.SubmissionDtos.SubmissionBatchResponse;
+import com.edusistem.core.exam.presentation.dtos.SubmissionDtos.SubmissionBatchSummaryResponse;
 import com.edusistem.core.exam.presentation.dtos.SubmissionDtos.SubmissionResponse;
 import com.edusistem.core.exam.presentation.dtos.SubmissionDtos.SubmissionSummaryResponse;
 import com.edusistem.core.exam.presentation.dtos.SubmissionDtos.UpdateAnswerRequest;
@@ -17,6 +21,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.io.IOException;
+import java.util.List;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -40,12 +45,17 @@ import org.springframework.web.multipart.MultipartFile;
 public class ExamSubmissionController {
 
     private final SubmitAnswerSheetUseCase submit;
+    private final SubmitAnswerSheetBatchUseCase submitBatch;
+    private final QuerySubmissionBatchUseCase batches;
     private final QuerySubmissionUseCase query;
     private final ReviewSubmissionUseCase review;
 
-    public ExamSubmissionController(SubmitAnswerSheetUseCase submit, QuerySubmissionUseCase query,
+    public ExamSubmissionController(SubmitAnswerSheetUseCase submit, SubmitAnswerSheetBatchUseCase submitBatch,
+                                    QuerySubmissionBatchUseCase batches, QuerySubmissionUseCase query,
                                     ReviewSubmissionUseCase review) {
         this.submit = submit;
+        this.submitBatch = submitBatch;
+        this.batches = batches;
         this.query = query;
         this.review = review;
     }
@@ -65,6 +75,42 @@ public class ExamSubmissionController {
         }
         return SubmissionResponse.from(submit.submit(new SubmissionCommands.Submit(user.id(), examId, image.getBytes(),
                 image.getOriginalFilename(), studentId, replace)));
+    }
+
+    @PostMapping(value = "/batches", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Sube un PDF con todas las hojas escaneadas; se califica en segundo plano",
+            description = "Valida el examen y el PDF y responde de inmediato con el lote en QUEUED. Cada página se procesa "
+                    + "después como una foto individual (QR → estudiante → burbujas → nota) y se guarda por separado. "
+                    + "Consulte GET /batches/{batchId} para ver el progreso y los resultados. 'replace=true' reprocesa "
+                    + "a los estudiantes que ya tenían resultado.")
+    public SubmissionBatchSummaryResponse uploadBatch(@AuthenticationPrincipal AuthenticatedUser user,
+                                                      @PathVariable Long examId,
+                                                      @RequestPart("file") MultipartFile file,
+                                                      @RequestParam(defaultValue = "false") boolean replace)
+            throws IOException {
+        if (file.isEmpty()) {
+            throw new InvalidRequestException("INVALID_PDF", "The file is empty");
+        }
+        return SubmissionBatchSummaryResponse.from(submitBatch.start(new SubmissionCommands.SubmitBatch(user.id(),
+                examId, file.getBytes(), file.getOriginalFilename(), replace)));
+    }
+
+    @GetMapping("/batches")
+    @Operation(summary = "Lotes (PDF) subidos para el examen, más recientes primero, con su estado y progreso")
+    public List<SubmissionBatchSummaryResponse> listBatches(@AuthenticationPrincipal AuthenticatedUser user,
+                                                            @PathVariable Long examId) {
+        return batches.list(user.id(), examId).stream().map(SubmissionBatchSummaryResponse::from).toList();
+    }
+
+    @GetMapping("/batches/{batchId}")
+    @Operation(summary = "Estado de un lote: progreso, resultado por página y resumen de notas",
+            description = "Mientras status sea QUEUED o PROCESSING, 'pages' contiene solo las páginas ya resueltas. "
+                    + "Outcome por página: PROCESSED, REVIEW_REQUIRED, FAILED, REJECTED (con errorCode) o SKIPPED "
+                    + "(no es una hoja, p. ej. el cuadernillo). Las notas reflejan el estado actual de cada submission.")
+    public SubmissionBatchResponse getBatch(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long examId,
+                                            @PathVariable Long batchId) {
+        return SubmissionBatchResponse.from(batches.get(user.id(), examId, batchId));
     }
 
     @GetMapping

@@ -148,4 +148,26 @@ class AnswerSheetProcessingTest {
         assertThat(answers.get(59).selectedOption()).isEqualTo("B");
         assertThat(answers.get(1).status()).isEqualTo(AnswerDetectionStatus.EMPTY);
     }
+
+    @Test
+    void readsAFullSheetOfOneHundredQuestionsWithSixOptionsFromAPhoto() {
+        AnswerSheetLayout full = new AnswerSheetLayout(100, 6);
+        byte[] fullPdf = new PdfAnswerSheetRenderer().render(List.of(new AnswerSheetData("Simulacro final", "Química",
+                "11° A", "Ruiz Eva", "EST-000555", QrPayload.encode(11, "EST-000555"), full)));
+        BufferedImage img = SheetImages.render(fullPdf, 0, DPI);
+        // F junto a los números de la columna siguiente y A junto al número propio, en todas las columnas.
+        int[][] marks = {{1, 5}, {25, 5}, {26, 0}, {50, 5}, {51, 0}, {75, 5}, {76, 0}, {100, 5}, {13, 2}, {88, 3}};
+        for (int[] m : marks) {
+            SheetImages.mark(img, full, DPI, m[0], m[1]);
+        }
+        BufferedImage photo = SheetImages.photo(img, -5, 0.8);
+        List<DetectedAnswer> answers = CLASSIFIER.classify(PROCESSOR.readBubbles(SheetImages.jpeg(photo), full));
+        for (int[] m : marks) {
+            DetectedAnswer a = answers.get(m[0] - 1);
+            assertThat(a.status()).as("question %d", m[0]).isEqualTo(AnswerDetectionStatus.MARKED);
+            assertThat(a.selectedOption()).as("question %d", m[0])
+                    .isEqualTo(String.valueOf(AnswerSheetLayout.optionLetter(m[1])));
+        }
+        assertThat(answers.stream().filter(a -> a.status() == AnswerDetectionStatus.EMPTY)).hasSize(100 - marks.length);
+    }
 }

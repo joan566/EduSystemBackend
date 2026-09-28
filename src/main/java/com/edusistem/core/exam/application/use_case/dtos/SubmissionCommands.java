@@ -11,6 +11,10 @@ public final class SubmissionCommands {
     public record Submit(Long teacherId, Long examId, byte[] image, String fileName, Long studentId, boolean replace) {
     }
 
+    /** PDF con varias hojas escaneadas; cada estudiante se identifica solo por el QR de su hoja. */
+    public record SubmitBatch(Long teacherId, Long examId, byte[] pdf, String fileName, boolean replace) {
+    }
+
     public record UpdateAnswer(Long teacherId, Long examId, Long submissionId, int questionNumber,
                                String selectedOption, String reason) {
     }

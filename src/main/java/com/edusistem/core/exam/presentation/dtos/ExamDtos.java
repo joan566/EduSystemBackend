@@ -57,6 +57,20 @@ public final class ExamDtos {
             return new QuestionResponse(q.getQuestionNumber(), q.getStatement(), q.getCorrectOption(), q.getPoints(),
                     q.getOptions().stream().map(o -> new OptionResponse(o.getOptionLetter(), o.getOptionText())).toList());
         }
+
+        static QuestionResponse from(ExamCommands.QuestionInput q) {
+            return new QuestionResponse(q.questionNumber(), q.statement(), q.correctOption(), q.points(),
+                    q.options().stream().map(o -> new OptionResponse(o.letter(), o.text())).toList());
+        }
+    }
+
+    /** Preguntas interpretadas de un documento, sin guardar; {@code points} es nulo si el documento no lo indica. */
+    public record QuestionsPreviewResponse(int numberOfQuestions, int optionCount, List<QuestionResponse> questions) {
+
+        public static QuestionsPreviewResponse from(List<ExamCommands.QuestionInput> questions) {
+            return new QuestionsPreviewResponse(questions.size(), questions.get(0).options().size(),
+                    questions.stream().map(QuestionResponse::from).toList());
+        }
     }
 
     public record ExamSummaryResponse(Long id, Long evaluationId, Long teachingPeriodId, String name, String description,

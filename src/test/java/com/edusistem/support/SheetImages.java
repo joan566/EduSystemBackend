@@ -14,6 +14,11 @@ import java.util.Random;
 import javax.imageio.ImageIO;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.graphics.image.JPEGFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.PDFRenderer;
 
 /** Utilidades de test para simular la foto de una hoja: rasteriza el PDF y "rellena" burbujas. */
@@ -96,6 +101,26 @@ public final class SheetImages {
         }
         float[] blur = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
         return new ConvolveOp(new Kernel(3, 3, blur), ConvolveOp.EDGE_NO_OP, null).filter(canvas, null);
+    }
+
+    /** Simula un escaneo: un PDF con una página por imagen, cada una embebida como JPEG a {@code dpi}. */
+    public static byte[] scannedPdf(float dpi, BufferedImage... pages) {
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            for (BufferedImage image : pages) {
+                float w = image.getWidth() * 72f / dpi;
+                float h = image.getHeight() * 72f / dpi;
+                PDPage page = new PDPage(new PDRectangle(w, h));
+                document.addPage(page);
+                PDImageXObject xObject = JPEGFactory.createFromByteArray(document, jpeg(image));
+                try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                    content.drawImage(xObject, 0, 0, w, h);
+                }
+            }
+            document.save(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public static byte[] png(BufferedImage image) {

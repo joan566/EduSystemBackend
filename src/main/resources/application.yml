@@ -1,8 +1,12 @@
 spring:
   application:
     name: edusistem-backend
+  config:
+    # Variables locales en .env (raíz del proyecto, ignorado por git). Las variables de entorno reales tienen prioridad,
+    # así que en servidores/CI se siguen configurando como siempre. Si no existe .env, se ignora.
+    import: optional:file:.env[.properties]
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/edusistem}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/edusystem}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
   jpa:
@@ -18,8 +22,8 @@ spring:
     locations: classpath:db/migration
   servlet:
     multipart:
-      max-file-size: 15MB
-      max-request-size: 15MB
+      max-file-size: 60MB
+      max-request-size: 60MB
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:25}
@@ -62,6 +66,11 @@ edusistem:
     # Fracción de relleno de una burbuja a partir de la cual se considera marcada / dudosa
     mark-threshold: 0.45
     ambiguity-threshold: 0.20
+  submission-batches:
+    # PDF con hojas escaneadas que se procesan a la vez en segundo plano (cada uno usa un hilo)
+    workers: ${SUBMISSION_BATCH_WORKERS:2}
+    # Días que se conserva el PDF original de un lote terminado (los resultados se conservan siempre)
+    file-retention-days: ${SUBMISSION_BATCH_FILE_RETENTION_DAYS:30}
 
 springdoc:
   swagger-ui:

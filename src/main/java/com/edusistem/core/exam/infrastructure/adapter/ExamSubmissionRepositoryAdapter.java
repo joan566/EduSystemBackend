@@ -14,6 +14,7 @@ import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.infrastructure.adapter.PageMapper;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -68,6 +69,11 @@ public class ExamSubmissionRepositoryAdapter implements ExamSubmissionRepository
     @Override
     public PageResult<ExamSubmissionSummary> findSummariesByExamId(Long examId, ExamSubmissionStatus status, PageQuery page) {
         return PageMapper.toResult(submissions.findSummaries(examId, status, PageMapper.pageable(page)), s -> s);
+    }
+
+    @Override
+    public List<ExamSubmissionSummary> findSummariesByIds(Collection<Long> ids) {
+        return ids.isEmpty() ? List.of() : submissions.findSummariesByIds(ids);
     }
 
     private ExamSubmission assemble(ExamSubmissionEntity entity) {

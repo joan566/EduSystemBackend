@@ -41,6 +41,11 @@ public class LocalFileStorageAdapter implements FileStoragePort {
         return Files.exists(resolve(relativePath));
     }
 
+    @Override
+    public void delete(String relativePath) throws IOException {
+        Files.deleteIfExists(resolve(relativePath));
+    }
+
     private Path resolve(String relativePath) {
         Path resolved = base.resolve(relativePath).normalize();
         if (!resolved.startsWith(base)) {
