@@ -52,6 +52,9 @@ edusistem:
   cors:
     # Orígenes permitidos separados por coma (admite patrones: https://*.miapp.com). Vacío = CORS deshabilitado.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  school:
+    # Zona horaria IANA del colegio: define qué día es "hoy" en la agenda del profesor.
+    timezone: ${SCHOOL_TIMEZONE:America/Bogota}
   storage:
     base-path: ${STORAGE_PATH:./storage}
   mail:

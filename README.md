@@ -37,6 +37,7 @@ Los tests no usan `.env`: fijan sus propios valores y siempre desactivan el corr
 | `CORS_ALLOWED_ORIGINS` | no (vacío = CORS desactivado) | Orígenes permitidos separados por coma; admite patrones (`https://*.miapp.com`). Necesario para Flutter web |
 | `LOGIN_MAX_ATTEMPTS_PER_EMAIL`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `LOGIN_LOCK_WINDOW_MINUTES` | no (`5`, `50`, `15`) | Límite de intentos de login fallidos |
 | `STORAGE_PATH` | no (`./storage`) | Carpeta de fotos de hojas, Excel importados y reportes de error |
+| `SCHOOL_TIMEZONE` | no (`America/Bogota`) | Zona horaria IANA del colegio; define qué día es "hoy" en `/schedule/today` y el `serverTime` de la agenda |
 | `MAIL_ENABLED` | no (`false`) | Si es `true` envía el código de recuperación por SMTP |
 | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | solo con correo | SMTP |
 | `SERVER_PORT` | no (`8080`) | Puerto HTTP |
@@ -71,7 +72,8 @@ Migraciones Flyway en `src/main/resources/db/migration`:
 |---|---|
 | Auth | `POST /auth/register` · `/auth/login` · `/auth/refresh` · `/auth/logout` · `GET /auth/me` · `POST /auth/change-password` · `/auth/forgot-password` · `/auth/verify-code` · `/auth/reset-password` |
 | Usuario | `GET/PUT /users/me` |
-| Académico | CRUD `/grades`, `/groups`, `/subjects`, `/academic-periods` · `/teaching-assignments` (POST, GET, GET id, `PATCH /{id}/active`, DELETE) · `/teaching-periods` (POST, GET, GET id, DELETE) |
+| Académico | CRUD `/grades`, `/groups`, `/subjects`, `/academic-periods` · `/teaching-assignments` (POST, GET, GET id, `PATCH /{id}/active`, DELETE) · `/teaching-periods` (POST, GET, GET id, DELETE; incluye `studentCount`) |
+| Horario | `/teaching-periods/{id}/schedules` (GET, POST) · `/teaching-periods/{id}/schedules/{scheduleId}` (PUT, DELETE; 409 `SCHEDULE_CONFLICT` si el profesor ya tiene clase a esa hora) · `GET /schedule/today?date=` (clases del día ordenadas por hora + `serverTime` y `timezone` del colegio) · `GET /schedule?from=&to=` (día por día, máx. 93 días) |
 | Estudiantes | `GET /students`, `GET /students/{id}`, `POST /students/{studentId}/groups/{groupId}/withdrawal` |
 | Calificación | `/grading-scales` (POST, GET) · `PUT/GET /teaching-periods/{id}/grading-configuration` · `GET /teaching-periods/{id}/period-grades` |
 | Evaluaciones | `GET /evaluation-categories` · `GET /evaluations?teachingPeriodId=` · `GET/PUT /evaluations/{id}` |

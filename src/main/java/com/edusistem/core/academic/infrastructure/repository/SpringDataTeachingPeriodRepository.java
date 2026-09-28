@@ -16,7 +16,8 @@ public interface SpringDataTeachingPeriodRepository extends JpaRepository<Teachi
 
     String VIEW_SELECT = """
             select new com.edusistem.core.academic.domain.vo.TeachingPeriodView(tp.id, tp.teachingAssignmentId, ta.groupId,
-                g.name, gr.name, g.academicYear, ta.subjectId, s.name, tp.academicPeriodId, ap.name, ap.startDate, ap.endDate)
+                g.name, gr.name, g.academicYear, ta.subjectId, s.name, tp.academicPeriodId, ap.name, ap.startDate, ap.endDate,
+                (select count(sg) from StudentGroupEntity sg where sg.groupId = ta.groupId and sg.active = true))
             from TeachingPeriodEntity tp
             join TeachingAssignmentEntity ta on ta.id = tp.teachingAssignmentId
             join GroupEntity g on g.id = ta.groupId

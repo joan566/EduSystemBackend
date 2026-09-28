@@ -1,6 +1,8 @@
 package com.edusistem.core.academic.application.use_case.dtos;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 public final class AcademicCommands {
 
@@ -26,5 +28,10 @@ public final class AcademicCommands {
     }
 
     public record CreateTeachingPeriod(Long teacherId, Long teachingAssignmentId, Long academicPeriodId) {
+    }
+
+    /** {@code scheduleId} es null al crear. */
+    public record SaveSchedule(Long teacherId, Long teachingPeriodId, Long scheduleId, DayOfWeek dayOfWeek,
+                               LocalTime startTime, LocalTime endTime, String room) {
     }
 }

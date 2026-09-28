@@ -5,11 +5,13 @@ import com.edusistem.core.academic.domain.entity.Grade;
 import com.edusistem.core.academic.domain.entity.Group;
 import com.edusistem.core.academic.domain.entity.TeachingAssignment;
 import com.edusistem.core.academic.domain.entity.TeachingPeriod;
+import com.edusistem.core.academic.domain.entity.TeachingPeriodSchedule;
 import com.edusistem.core.academic.infrastructure.entity.AcademicPeriodEntity;
 import com.edusistem.core.academic.infrastructure.entity.GradeEntity;
 import com.edusistem.core.academic.infrastructure.entity.GroupEntity;
 import com.edusistem.core.academic.infrastructure.entity.TeachingAssignmentEntity;
 import com.edusistem.core.academic.infrastructure.entity.TeachingPeriodEntity;
+import com.edusistem.core.academic.infrastructure.entity.TeachingPeriodScheduleEntity;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
@@ -34,4 +36,8 @@ public interface AcademicMapper {
     TeachingPeriod toDomain(TeachingPeriodEntity entity);
 
     TeachingPeriodEntity toEntity(TeachingPeriod teachingPeriod);
+
+    TeachingPeriodSchedule toDomain(TeachingPeriodScheduleEntity entity);
+
+    TeachingPeriodScheduleEntity toEntity(TeachingPeriodSchedule schedule);
 }

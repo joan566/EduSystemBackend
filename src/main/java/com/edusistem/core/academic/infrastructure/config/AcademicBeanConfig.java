@@ -4,16 +4,21 @@ import com.edusistem.core.academic.application.use_case.service.AcademicPeriodSe
 import com.edusistem.core.academic.application.use_case.service.GradeService;
 import com.edusistem.core.academic.application.use_case.service.GroupService;
 import com.edusistem.core.academic.application.use_case.service.TeachingAssignmentService;
+import com.edusistem.core.academic.application.use_case.service.TeacherScheduleService;
+import com.edusistem.core.academic.application.use_case.service.TeachingPeriodScheduleService;
 import com.edusistem.core.academic.application.use_case.service.TeachingPeriodService;
 import com.edusistem.core.academic.domain.outputports.AcademicPeriodRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.GradeRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.GroupRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingAssignmentRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPort;
+import com.edusistem.core.academic.domain.outputports.TeachingPeriodScheduleRepositoryPort;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
+import java.time.Clock;
+import java.time.ZoneId;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -51,5 +56,19 @@ public class AcademicBeanConfig {
                                                 AcademicPeriodRepositoryPort academicPeriods, OwnershipGuard guard,
                                                 RecordAuditUseCase audit) {
         return new TeachingPeriodService(teachingPeriods, assignments, academicPeriods, guard, audit);
+    }
+
+    @Bean
+    TeachingPeriodScheduleService teachingPeriodScheduleService(TeachingPeriodScheduleRepositoryPort schedules,
+                                                                TeachingPeriodRepositoryPort teachingPeriods,
+                                                                AcademicPeriodRepositoryPort academicPeriods,
+                                                                OwnershipGuard guard, RecordAuditUseCase audit) {
+        return new TeachingPeriodScheduleService(schedules, teachingPeriods, academicPeriods, guard, audit);
+    }
+
+    @Bean
+    TeacherScheduleService teacherScheduleService(TeachingPeriodScheduleRepositoryPort schedules, Clock clock,
+                                                  ZoneId schoolZoneId) {
+        return new TeacherScheduleService(schedules, clock, schoolZoneId);
     }
 }
