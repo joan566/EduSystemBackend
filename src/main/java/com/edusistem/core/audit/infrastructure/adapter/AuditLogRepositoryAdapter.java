@@ -50,6 +50,9 @@ public class AuditLogRepositoryAdapter implements AuditLogRepositoryPort {
         if (filter.entityId() != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("entityId"), filter.entityId()));
         }
+        if (filter.teachingPeriodId() != null) {
+            spec = spec.and((root, query, cb) -> cb.equal(root.get("teachingPeriodId"), filter.teachingPeriodId()));
+        }
         Page<AuditLogEntity> result = repository.findAll(spec,
                 PageRequest.of(page.page(), page.size(), Sort.by(Sort.Direction.DESC, "createdAt", "id")));
         return new PageResult<>(result.getContent().stream().map(mapper::toDomain).toList(), page.page(), page.size(),

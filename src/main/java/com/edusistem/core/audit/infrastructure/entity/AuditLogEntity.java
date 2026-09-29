@@ -39,6 +39,12 @@ public class AuditLogEntity extends CreatedAtEntity {
     @Column(name = "entity_id")
     private Long entityId;
 
+    @Column(name = "teaching_period_id")
+    private Long teachingPeriodId;
+
+    @Column(name = "entity_label")
+    private String entityLabel;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AuditResult result;

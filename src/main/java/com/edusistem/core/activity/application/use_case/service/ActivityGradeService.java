@@ -11,6 +11,7 @@ import com.edusistem.core.activity.domain.outputports.ActivityRepositoryPort;
 import com.edusistem.core.activity.domain.vo.StudentGradeView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
@@ -92,7 +93,14 @@ public class ActivityGradeService implements GradeActivityUseCase {
             toSave.add(grade);
         }
         grades.saveAll(toSave);
-        audit.success(command.teacherId(), AuditAction.GRADE_UPDATED, "Activity", activity.getId(), details.toString());
+        AuditTarget target = ActivityService.target(activity.getId(), evaluation);
+        if (toSave.size() == 1) {
+            String studentName = students.findById(toSave.get(0).getStudentId())
+                    .map(s -> s.getFirstName() + " " + s.getLastName()).orElse(null);
+            target = AuditTarget.inTeachingPeriod(target.entityType(), target.entityId(), target.teachingPeriodId(),
+                    AuditTarget.label(evaluation.getName(), studentName));
+        }
+        audit.success(command.teacherId(), AuditAction.GRADE_UPDATED, target, details.toString());
         return listGrades(command.teacherId(), activity.getId());
     }
 

@@ -13,6 +13,7 @@ import com.edusistem.core.attendance.domain.outputports.AttendanceSessionReposit
 import com.edusistem.core.attendance.domain.vo.AttendanceSessionView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationRepositoryPort;
 import com.edusistem.core.exports.domain.inputports.ExportUseCase;
@@ -103,7 +104,8 @@ public class ExportService implements ExportUseCase {
                 nullToEmpty(s.getIdentificationNumber()), s.getFirstName(), s.getLastName(), nullToEmpty(s.getEmail()))).toList();
         byte[] content = writer.write(new TabularData("Students",
                 List.of("student_code", "identification_number", "first_name", "last_name", "email"), rows));
-        audit.success(teacherId, AuditAction.EXPORT, "Students", teachingPeriodId, list.size() + " students");
+        audit.success(teacherId, AuditAction.EXPORT, AuditTarget.inTeachingPeriod("Students", teachingPeriodId,
+                teachingPeriodId, null), list.size() + " students");
         return new ExportedFile("students.xlsx", content);
     }
 
@@ -136,7 +138,7 @@ public class ExportService implements ExportUseCase {
             rows.add(row);
         }
         byte[] content = writer.write(new TabularData("Grades", headers, rows));
-        audit.success(teacherId, AuditAction.EXPORT, "Grades", teachingPeriodId, roster.size() + " students");
+        audit.success(teacherId, AuditAction.EXPORT, target("Grades", period), roster.size() + " students");
         return new ExportedFile("grades-teaching-period-" + teachingPeriodId + ".xlsx", content);
     }
 
@@ -185,7 +187,7 @@ public class ExportService implements ExportUseCase {
             rows.add(row);
         }
         byte[] content = writer.write(new TabularData("Attendance", headers, rows));
-        audit.success(teacherId, AuditAction.EXPORT, "Attendance", teachingPeriodId, allSessions.size() + " sessions");
+        audit.success(teacherId, AuditAction.EXPORT, target("Attendance", period), allSessions.size() + " sessions");
         return new ExportedFile("attendance-teaching-period-" + teachingPeriodId + ".xlsx", content);
     }
 
@@ -198,7 +200,7 @@ public class ExportService implements ExportUseCase {
 
         byte[] content = writer.writeWorkbook(List.of(fullStudentsSheet(roster), fullGradesSheet(teacherId, roster, activityList),
                 fullAttendanceSheet(roster, sessionList)));
-        audit.success(teacherId, AuditAction.EXPORT, "TeachingPeriodFull", teachingPeriodId, roster.size() + " students");
+        audit.success(teacherId, AuditAction.EXPORT, target("TeachingPeriodFull", periodView), roster.size() + " students");
         return new ExportedFile("teaching-period-" + teachingPeriodId + "-full.xlsx", content);
     }
 
@@ -268,6 +270,10 @@ public class ExportService implements ExportUseCase {
         } while (n < page.totalPages());
         list.sort(java.util.Comparator.comparing(AttendanceSessionView::sessionDate));
         return list;
+    }
+
+    private static AuditTarget target(String entityType, TeachingPeriodView period) {
+        return AuditTarget.inTeachingPeriod(entityType, period.id(), period.id(), period.label());
     }
 
     private TeachingPeriodView period(Long teacherId, Long teachingPeriodId) {

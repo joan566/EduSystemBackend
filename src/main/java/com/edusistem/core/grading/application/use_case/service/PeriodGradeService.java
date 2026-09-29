@@ -68,7 +68,7 @@ public class PeriodGradeService implements CalculatePeriodGradeUseCase {
             return new StudentPeriodGrade(student.getId(), student.getStudentCode(), fullName(student),
                     result.categories(), result.periodGrade());
         }).toList();
-        return new PeriodGradeReport(teachingPeriodId, scale, grades);
+        return new PeriodGradeReport(teachingPeriodId, scale, configuration.getPassingGrade(), grades);
     }
 
     private static String fullName(Student s) {

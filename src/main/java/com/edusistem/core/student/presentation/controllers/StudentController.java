@@ -7,7 +7,7 @@ import com.edusistem.core.student.application.use_case.dtos.StudentCommands;
 import com.edusistem.core.student.domain.inputports.QueryStudentUseCase;
 import com.edusistem.core.student.domain.inputports.WithdrawStudentUseCase;
 import com.edusistem.core.student.presentation.dtos.StudentDtos.StudentDetailResponse;
-import com.edusistem.core.student.presentation.dtos.StudentDtos.StudentResponse;
+import com.edusistem.core.student.presentation.dtos.StudentDtos.StudentListResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -36,13 +36,13 @@ public class StudentController {
 
     @GetMapping
     @Operation(summary = "Lista paginada de los estudiantes del profesor (filtros: groupId, search)")
-    public PageResponse<StudentResponse> list(@AuthenticationPrincipal AuthenticatedUser user,
+    public PageResponse<StudentListResponse> list(@AuthenticationPrincipal AuthenticatedUser user,
                                               @RequestParam(required = false) Long groupId,
                                               @RequestParam(required = false) String search,
                                               @RequestParam(required = false) Integer page,
                                               @RequestParam(required = false) Integer size) {
         return PageResponse.from(queryStudents.search(user.id(), groupId, search, PageQuery.of(page, size)),
-                StudentResponse::from);
+                StudentListResponse::from);
     }
 
     @GetMapping("/{id}")

@@ -2,6 +2,7 @@ package com.edusistem.core.exam.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.application.use_case.dtos.EvaluationCommands;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.enums.EvaluationCategoryCode;
@@ -68,7 +69,7 @@ public class ExamService implements ManageExamUseCase {
             applyQuestions(exam, evaluation, command.questions());
         }
         Exam saved = exams.save(exam);
-        audit.success(command.teacherId(), AuditAction.CREATE, "Exam", saved.getId(), evaluation.getName());
+        audit.success(command.teacherId(), AuditAction.CREATE, target(saved.getId(), evaluation), evaluation.getName());
         return get(command.teacherId(), saved.getId());
     }
 
@@ -87,7 +88,7 @@ public class ExamService implements ManageExamUseCase {
         evaluation.updateDetails(command.name(), command.description(), command.evaluationDate());
         evaluation.validate();
         evaluations.save(evaluation);
-        audit.success(command.teacherId(), AuditAction.UPDATE, "Exam", command.examId(), evaluation.getName());
+        audit.success(command.teacherId(), AuditAction.UPDATE, target(command.examId(), evaluation), evaluation.getName());
         return get(command.teacherId(), command.examId());
     }
 
@@ -101,7 +102,7 @@ public class ExamService implements ManageExamUseCase {
         }
         applyQuestions(ctx.exam(), ctx.evaluation(), command.questions());
         exams.save(ctx.exam());
-        audit.success(command.teacherId(), AuditAction.UPDATE, "Exam", command.examId(),
+        audit.success(command.teacherId(), AuditAction.UPDATE, target(command.examId(), ctx.evaluation()),
                 "questions replaced (" + ctx.exam().getNumberOfQuestions() + ")");
         return get(command.teacherId(), command.examId());
     }
@@ -115,13 +116,17 @@ public class ExamService implements ManageExamUseCase {
         }
         exams.deleteById(examId);
         evaluations.deleteById(ctx.evaluation().getId());
-        audit.success(teacherId, AuditAction.DELETE, "Exam", examId, ctx.evaluation().getName());
+        audit.success(teacherId, AuditAction.DELETE, target(examId, ctx.evaluation()), ctx.evaluation().getName());
     }
 
     @Override
     public PageResult<ExamView> search(Long teacherId, Long teachingPeriodId, PageQuery page) {
         guard.requireTeachingPeriod(teacherId, teachingPeriodId);
         return exams.findViewsByTeachingPeriodId(teachingPeriodId, page);
+    }
+
+    static AuditTarget target(Long examId, Evaluation evaluation) {
+        return AuditTarget.inTeachingPeriod("Exam", examId, evaluation.getTeachingPeriodId(), evaluation.getName());
     }
 
     /** Construye las preguntas, aplica puntos por defecto y ajusta el puntaje máximo de la evaluación a su suma. */

@@ -15,6 +15,6 @@ public final class GradingCommands {
     }
 
     public record SaveConfiguration(Long teacherId, Long teachingPeriodId, Long gradingScaleId,
-                                    List<WeightInput> weights) {
+                                    List<WeightInput> weights, BigDecimal passingGrade) {
     }
 }

@@ -115,7 +115,8 @@ public class ExamBeanConfig {
     SubmissionReviewService submissionReviewService(ExamContextLoader loader,
                                                     ExamSubmissionRepositoryPort submissions,
                                                     SubmissionDetailsAssembler assembler, OwnershipGuard guard,
-                                                    RecordAuditUseCase audit, FileStoragePort storage, Clock clock) {
-        return new SubmissionReviewService(loader, submissions, assembler, guard, audit, storage, clock);
+                                                    StudentRepositoryPort students, RecordAuditUseCase audit,
+                                                    FileStoragePort storage, Clock clock) {
+        return new SubmissionReviewService(loader, submissions, assembler, guard, students, audit, storage, clock);
     }
 }

@@ -44,9 +44,19 @@ class ImportIntegrationTest extends IntegrationTest {
         assertThat(students.get("totalElements").asInt()).isEqualTo(2);
         JsonNode first = students.get("content").get(0);
         assertThat(first.get("studentCode").asText()).startsWith("EST-");
+        JsonNode current = first.get("currentEnrollment");
+        assertThat(current.get("groupId").asLong()).isEqualTo(c.groupId());
+        assertThat(current.get("active").asBoolean()).isTrue();
         assertThat(students.toString()).contains("Pérez").contains("Gómez");
         assertThat(jdbc.queryForObject("select count(*) from student_groups where group_id = ? and active", Integer.class, c.groupId()))
                 .isEqualTo(2);
+
+        // A withdrawn student keeps their course in the listing, marked inactive.
+        long withdrawn = students.get("content").get(1).get("id").asLong();
+        post(t, "/api/v1/students/" + withdrawn + "/groups/" + c.groupId() + "/withdrawal", Map.of(), 204);
+        JsonNode afterWithdrawal = get(t, "/api/v1/students?groupId=" + c.groupId(), 200).get("content");
+        assertThat(afterWithdrawal).filteredOn(s -> s.get("id").asLong() == withdrawn).singleElement()
+                .satisfies(s -> assertThat(s.get("currentEnrollment").get("active").asBoolean()).isFalse());
 
         Map<String, Object> batch = jdbc.queryForMap("select * from import_batches where id = ?", result.get("id").asLong());
         assertThat(batch.get("status")).isEqualTo("COMPLETED");

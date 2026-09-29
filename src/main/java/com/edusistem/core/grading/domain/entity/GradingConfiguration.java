@@ -33,6 +33,8 @@ public class GradingConfiguration {
     private Long id;
     private Long teachingPeriodId;
     private Long gradingScaleId;
+    /** Nota mínima para aprobar el periodo; nula si la clase no la define. */
+    private BigDecimal passingGrade;
     @Builder.Default
     private List<GradingWeight> weights = new ArrayList<>();
     private LocalDateTime createdAt;
@@ -62,6 +64,20 @@ public class GradingConfiguration {
             throw new InvalidRequestException("WEIGHTS_EXCEED_100",
                     "The weights add up to " + totalWeight().stripTrailingZeros().toPlainString() + "%, which exceeds 100%");
         }
+    }
+
+    /** La nota mínima, si existe, debe estar dentro de la escala. */
+    public void validatePassingGrade(GradingScale scale) {
+        if (passingGrade != null && !scale.contains(passingGrade)) {
+            throw new InvalidRequestException("INVALID_PASSING_GRADE",
+                    "The passing grade must be between " + scale.getMinimumValue().stripTrailingZeros().toPlainString()
+                            + " and " + scale.getMaximumValue().stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /** Aprobado si hay nota mínima y nota del periodo; nulo si falta alguna. */
+    public Boolean isPassing(BigDecimal periodGrade) {
+        return passingGrade == null || periodGrade == null ? null : periodGrade.compareTo(passingGrade) >= 0;
     }
 
     /** Validación para calcular notas: exige suma exacta de 100%. */

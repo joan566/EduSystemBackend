@@ -7,9 +7,11 @@ import com.edusistem.core.academic.domain.inputports.ManageTeachingPeriodUseCase
 import com.edusistem.core.academic.domain.outputports.AcademicPeriodRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingAssignmentRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPort;
+import com.edusistem.core.academic.domain.vo.TeachingPeriodSummary;
 import com.edusistem.core.academic.domain.vo.TeachingPeriodView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
@@ -54,8 +56,9 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
         });
         TeachingPeriod saved = teachingPeriods.save(TeachingPeriod.builder()
                 .teachingAssignmentId(command.teachingAssignmentId()).academicPeriodId(command.academicPeriodId()).build());
-        audit.success(command.teacherId(), AuditAction.CREATE, "TeachingPeriod", saved.getId(), null);
-        return get(command.teacherId(), saved.getId());
+        TeachingPeriodView view = get(command.teacherId(), saved.getId());
+        audit.success(command.teacherId(), AuditAction.CREATE, target(view), null);
+        return view;
     }
 
     @Override
@@ -66,8 +69,13 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
             throw new ConflictException("TEACHING_PERIOD_HAS_DATA",
                     "The teaching period has evaluations or a grading configuration and cannot be deleted");
         }
+        TeachingPeriodView view = get(teacherId, teachingPeriodId);
         teachingPeriods.deleteById(teachingPeriodId);
-        audit.success(teacherId, AuditAction.DELETE, "TeachingPeriod", teachingPeriodId, null);
+        audit.success(teacherId, AuditAction.DELETE, target(view), null);
+    }
+
+    private static AuditTarget target(TeachingPeriodView view) {
+        return AuditTarget.inTeachingPeriod("TeachingPeriod", view.id(), view.id(), view.label());
     }
 
     @Override
@@ -75,6 +83,12 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
         guard.requireTeachingPeriod(teacherId, teachingPeriodId);
         return teachingPeriods.findViewById(teachingPeriodId)
                 .orElseThrow(() -> ResourceNotFoundException.of("TeachingPeriod", teachingPeriodId));
+    }
+
+    @Override
+    public TeachingPeriodSummary summary(Long teacherId, Long teachingPeriodId) {
+        guard.requireTeachingPeriod(teacherId, teachingPeriodId);
+        return teachingPeriods.summarize(teachingPeriodId);
     }
 
     @Override

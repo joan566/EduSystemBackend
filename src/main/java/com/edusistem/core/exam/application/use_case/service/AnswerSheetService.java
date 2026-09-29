@@ -2,6 +2,7 @@ package com.edusistem.core.exam.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.exam.application.use_case.service.ExamContextLoader.ExamContext;
 import com.edusistem.core.exam.domain.inputports.GenerateAnswerSheetUseCase;
 import com.edusistem.core.exam.domain.outputports.AnswerSheetRendererPort;
@@ -43,7 +44,9 @@ public class AnswerSheetService implements GenerateAnswerSheetUseCase {
             throw ResourceNotFoundException.of("Student", studentId);
         }
         byte[] pdf = renderer.render(List.of(sheetFor(ctx, student)), includeQuestions ? bookletFor(ctx) : null);
-        audit.success(teacherId, AuditAction.EXPORT, "AnswerSheet", examId, "student " + student.getStudentCode());
+        audit.success(teacherId, AuditAction.EXPORT, target("AnswerSheet", examId, ctx,
+                AuditTarget.label(ctx.evaluation().getName(), student.getFirstName() + " " + student.getLastName())),
+                "student " + student.getStudentCode());
         return new PdfDocument("answer-sheet-exam" + examId + "-" + student.getStudentCode() + ".pdf", pdf);
     }
 
@@ -56,7 +59,8 @@ public class AnswerSheetService implements GenerateAnswerSheetUseCase {
         }
         byte[] pdf = renderer.render(groupStudents.stream().map(s -> sheetFor(ctx, s)).toList(),
                 includeQuestions ? bookletFor(ctx) : null);
-        audit.success(teacherId, AuditAction.EXPORT, "AnswerSheet", examId, groupStudents.size() + " sheets");
+        audit.success(teacherId, AuditAction.EXPORT, target("AnswerSheet", examId, ctx, ctx.evaluation().getName()),
+                groupStudents.size() + " sheets");
         return new PdfDocument("answer-sheets-exam" + examId + ".pdf", pdf);
     }
 
@@ -64,8 +68,13 @@ public class AnswerSheetService implements GenerateAnswerSheetUseCase {
     public PdfDocument questionBooklet(Long teacherId, Long examId) {
         ExamContext ctx = readyContext(teacherId, examId);
         byte[] pdf = renderer.renderBooklet(bookletFor(ctx));
-        audit.success(teacherId, AuditAction.EXPORT, "QuestionBooklet", examId, ctx.evaluation().getName());
+        audit.success(teacherId, AuditAction.EXPORT, target("QuestionBooklet", examId, ctx, ctx.evaluation().getName()),
+                ctx.evaluation().getName());
         return new PdfDocument("questions-exam" + examId + ".pdf", pdf);
+    }
+
+    private static AuditTarget target(String entityType, Long examId, ExamContext ctx, String label) {
+        return AuditTarget.inTeachingPeriod(entityType, examId, ctx.evaluation().getTeachingPeriodId(), label);
     }
 
     private ExamContext readyContext(Long teacherId, Long examId) {

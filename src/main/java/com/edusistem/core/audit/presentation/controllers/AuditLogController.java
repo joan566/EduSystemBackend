@@ -32,9 +32,10 @@ public class AuditLogController {
                                                @RequestParam(required = false) AuditAction action,
                                                @RequestParam(required = false) String entityType,
                                                @RequestParam(required = false) Long entityId,
+                                               @RequestParam(required = false) Long teachingPeriodId,
                                                @RequestParam(required = false) Integer page,
                                                @RequestParam(required = false) Integer size) {
-        var result = listAuditLogs.list(user.id(), new AuditLogFilter(action, entityType, entityId),
+        var result = listAuditLogs.list(user.id(), new AuditLogFilter(action, entityType, entityId, teachingPeriodId),
                 PageQuery.of(page, size));
         return PageResponse.from(result, AuditLogResponse::from);
     }

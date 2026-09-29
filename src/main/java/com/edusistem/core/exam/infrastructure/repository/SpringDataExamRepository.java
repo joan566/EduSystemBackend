@@ -13,7 +13,9 @@ public interface SpringDataExamRepository extends JpaRepository<ExamEntity, Long
 
     String VIEW_SELECT = """
             select new com.edusistem.core.exam.domain.vo.ExamView(x.id, e.id, e.teachingPeriodId, e.name, e.description,
-                e.evaluationDate, e.maximumScore, x.numberOfQuestions)
+                e.evaluationDate, e.maximumScore, x.numberOfQuestions,
+                case when (select count(q) from ExamQuestionEntity q where q.examId = x.id) = x.numberOfQuestions
+                    then true else false end)
             from ExamEntity x join EvaluationEntity e on e.id = x.evaluationId
             """;
 

@@ -74,11 +74,12 @@ public final class ExamDtos {
     }
 
     public record ExamSummaryResponse(Long id, Long evaluationId, Long teachingPeriodId, String name, String description,
-                                      LocalDateTime evaluationDate, BigDecimal maximumScore, int numberOfQuestions) {
+                                      LocalDateTime evaluationDate, BigDecimal maximumScore, int numberOfQuestions,
+                                      boolean ready) {
 
         public static ExamSummaryResponse from(ExamView v) {
             return new ExamSummaryResponse(v.examId(), v.evaluationId(), v.teachingPeriodId(), v.name(), v.description(),
-                    v.evaluationDate(), v.maximumScore(), v.numberOfQuestions());
+                    v.evaluationDate(), v.maximumScore(), v.numberOfQuestions(), v.ready());
         }
     }
 

@@ -4,6 +4,7 @@ import com.edusistem.core.academic.application.use_case.dtos.AcademicCommands;
 import com.edusistem.core.academic.domain.inputports.ManageTeachingPeriodUseCase;
 import com.edusistem.core.academic.presentation.dtos.AcademicDtos.TeachingPeriodRequest;
 import com.edusistem.core.academic.presentation.dtos.AcademicDtos.TeachingPeriodResponse;
+import com.edusistem.core.academic.presentation.dtos.AcademicDtos.TeachingPeriodSummaryResponse;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.infrastructure.security.AuthenticatedUser;
 import com.edusistem.core.shared.presentation.PageResponse;
@@ -57,6 +58,12 @@ public class TeachingPeriodController {
     @Operation(summary = "Consulta un periodo de enseñanza propio")
     public TeachingPeriodResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
         return TeachingPeriodResponse.from(teachingPeriods.get(user.id(), id));
+    }
+
+    @GetMapping("/{id}/summary")
+    @Operation(summary = "Progreso general de un periodo de enseñanza propio (estudiantes, evaluaciones y notas)")
+    public TeachingPeriodSummaryResponse summary(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return TeachingPeriodSummaryResponse.from(teachingPeriods.summary(user.id(), id));
     }
 
     @DeleteMapping("/{id}")

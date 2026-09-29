@@ -13,6 +13,7 @@ import com.edusistem.core.attendance.domain.vo.AttendanceSessionView;
 import com.edusistem.core.attendance.domain.vo.StudentAttendanceView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.application.use_case.dtos.EvaluationCommands;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.enums.EvaluationCategoryCode;
@@ -78,7 +79,8 @@ public class AttendanceService implements ManageAttendanceUseCase {
                 command.sessionDate().atStartOfDay(), max));
         AttendanceSession saved = sessions.save(AttendanceSession.builder().evaluationId(evaluation.getId())
                 .sessionDate(command.sessionDate()).build());
-        audit.success(command.teacherId(), AuditAction.CREATE, "AttendanceSession", saved.getId(), name);
+        audit.success(command.teacherId(), AuditAction.CREATE,
+                target(saved.getId(), evaluation.getTeachingPeriodId(), evaluation.getName()), name);
         return sessions.findViewById(saved.getId()).orElseThrow();
     }
 
@@ -120,7 +122,8 @@ public class AttendanceService implements ManageAttendanceUseCase {
             toSave.add(record);
         }
         records.saveAll(toSave);
-        audit.success(command.teacherId(), AuditAction.UPDATE, "AttendanceSession", session.sessionId(),
+        audit.success(command.teacherId(), AuditAction.UPDATE,
+                target(session.sessionId(), session.teachingPeriodId(), session.name()),
                 toSave.size() + " record(s) saved");
         return details(session.sessionId());
     }
@@ -135,15 +138,22 @@ public class AttendanceService implements ManageAttendanceUseCase {
             throw new ConflictException("ATTENDANCE_SESSION_HAS_RECORDS",
                     "The session has attendance records and cannot be deleted");
         }
+        Evaluation evaluation = evaluations.findById(session.getEvaluationId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Evaluation", session.getEvaluationId()));
         sessions.deleteById(sessionId);
         evaluations.deleteById(session.getEvaluationId());
-        audit.success(teacherId, AuditAction.DELETE, "AttendanceSession", sessionId, null);
+        audit.success(teacherId, AuditAction.DELETE,
+                target(sessionId, evaluation.getTeachingPeriodId(), evaluation.getName()), evaluation.getName());
     }
 
     @Override
     public PageResult<AttendanceSessionView> search(Long teacherId, Long teachingPeriodId, PageQuery page) {
         guard.requireTeachingPeriod(teacherId, teachingPeriodId);
         return sessions.findViewsByTeachingPeriodId(teachingPeriodId, page);
+    }
+
+    private static AuditTarget target(Long sessionId, Long teachingPeriodId, String name) {
+        return AuditTarget.inTeachingPeriod("AttendanceSession", sessionId, teachingPeriodId, name);
     }
 
     private AttendanceSessionDetails details(Long sessionId) {

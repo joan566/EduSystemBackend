@@ -18,9 +18,16 @@ import com.edusistem.core.student.domain.outputports.StudentCodeGeneratorPort;
 import com.edusistem.core.student.domain.outputports.StudentGroupRepositoryPort;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import com.edusistem.core.student.domain.vo.StudentDetails;
+import com.edusistem.core.student.domain.vo.StudentEnrollmentRow;
+import com.edusistem.core.student.domain.vo.StudentEnrollmentView;
+import com.edusistem.core.student.domain.vo.StudentListItem;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 public class StudentService implements RegisterStudentUseCase, QueryStudentUseCase, WithdrawStudentUseCase {
 
@@ -105,11 +112,27 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     }
 
     @Override
-    public PageResult<Student> search(Long teacherId, Long groupId, String search, PageQuery page) {
+    public PageResult<StudentListItem> search(Long teacherId, Long groupId, String search, PageQuery page) {
         if (groupId != null) {
             guard.requireGroup(teacherId, groupId);
         }
-        return students.searchByTeacher(teacherId, groupId, search, page);
+        PageResult<Student> result = students.searchByTeacher(teacherId, groupId, search, page);
+        Map<Long, List<StudentEnrollmentRow>> byStudent = studentGroups
+                .findEnrollmentRows(result.items().stream().map(Student::getId).toList()).stream()
+                .collect(Collectors.groupingBy(StudentEnrollmentRow::studentId));
+        return result.map(s -> new StudentListItem(s,
+                currentEnrollment(byStudent.getOrDefault(s.getId(), List.of()), groupId)));
+    }
+
+    /** The filtered group's enrollment; otherwise active before withdrawn, then the most recent year and date. */
+    private static StudentEnrollmentView currentEnrollment(List<StudentEnrollmentRow> rows, Long groupId) {
+        return rows.stream()
+                .max(Comparator.<StudentEnrollmentRow, Boolean>comparing(r -> r.groupId().equals(groupId))
+                        .thenComparing(StudentEnrollmentRow::active)
+                        .thenComparingInt(StudentEnrollmentRow::academicYear)
+                        .thenComparing(StudentEnrollmentRow::enrolledAt))
+                .map(StudentEnrollmentRow::toView)
+                .orElse(null);
     }
 
     @Override

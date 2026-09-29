@@ -1,6 +1,7 @@
 package com.edusistem.core.academic.domain.outputports;
 
 import com.edusistem.core.academic.domain.entity.TeachingPeriod;
+import com.edusistem.core.academic.domain.vo.TeachingPeriodSummary;
 import com.edusistem.core.academic.domain.vo.TeachingPeriodView;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
@@ -18,6 +19,8 @@ public interface TeachingPeriodRepositoryPort {
 
     PageResult<TeachingPeriodView> findViewsByTeacherId(Long teacherId, Long teachingAssignmentId, Long academicPeriodId,
                                                         PageQuery page);
+
+    TeachingPeriodSummary summarize(Long teachingPeriodId);
 
     /** Tiene evaluaciones o configuración de calificación. */
     boolean hasDependents(Long teachingPeriodId);

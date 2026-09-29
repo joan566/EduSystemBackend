@@ -2,6 +2,7 @@ package com.edusistem.core.evaluation.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.application.use_case.dtos.EvaluationCommands;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.entity.EvaluationCategory;
@@ -73,7 +74,8 @@ public class EvaluationService implements CreateEvaluationUseCase, QueryEvaluati
         evaluation.updateDetails(command.name(), command.description(), command.evaluationDate());
         evaluation.validate();
         evaluations.save(evaluation);
-        audit.success(command.teacherId(), AuditAction.UPDATE, "Evaluation", evaluation.getId(), evaluation.getName());
+        audit.success(command.teacherId(), AuditAction.UPDATE, AuditTarget.inTeachingPeriod("Evaluation",
+                evaluation.getId(), evaluation.getTeachingPeriodId(), evaluation.getName()), evaluation.getName());
         return get(command.teacherId(), evaluation.getId());
     }
 

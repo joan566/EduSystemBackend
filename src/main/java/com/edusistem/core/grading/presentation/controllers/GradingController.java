@@ -68,7 +68,7 @@ public class GradingController {
                                                    @PathVariable Long teachingPeriodId,
                                                    @Valid @RequestBody ConfigurationRequest request) {
         return ConfigurationResponse.from(configuration.save(new GradingCommands.SaveConfiguration(user.id(),
-                teachingPeriodId, request.gradingScaleId(), request.toWeights())));
+                teachingPeriodId, request.gradingScaleId(), request.toWeights(), request.passingGrade())));
     }
 
     @GetMapping("/teaching-periods/{teachingPeriodId}/grading-configuration")

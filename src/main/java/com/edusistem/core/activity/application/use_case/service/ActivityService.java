@@ -8,6 +8,7 @@ import com.edusistem.core.activity.domain.outputports.ActivityRepositoryPort;
 import com.edusistem.core.activity.domain.vo.ActivityView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.application.use_case.dtos.EvaluationCommands;
 import com.edusistem.core.evaluation.domain.entity.Evaluation;
 import com.edusistem.core.evaluation.domain.enums.EvaluationCategoryCode;
@@ -49,7 +50,7 @@ public class ActivityService implements ManageActivityUseCase {
                 command.evaluationDate(), command.maximumScore()));
         Activity saved = activities.save(Activity.builder().evaluationId(evaluation.getId())
                 .activityType(blankToNull(command.activityType())).build());
-        audit.success(command.teacherId(), AuditAction.CREATE, "Activity", saved.getId(), evaluation.getName());
+        audit.success(command.teacherId(), AuditAction.CREATE, target(saved.getId(), evaluation), evaluation.getName());
         return get(command.teacherId(), saved.getId());
     }
 
@@ -81,7 +82,7 @@ public class ActivityService implements ManageActivityUseCase {
         evaluations.save(evaluation);
         activity.setActivityType(blankToNull(command.activityType()));
         activities.save(activity);
-        audit.success(command.teacherId(), AuditAction.UPDATE, "Activity", activity.getId(), evaluation.getName());
+        audit.success(command.teacherId(), AuditAction.UPDATE, target(activity.getId(), evaluation), evaluation.getName());
         return get(command.teacherId(), activity.getId());
     }
 
@@ -94,15 +95,21 @@ public class ActivityService implements ManageActivityUseCase {
         if (grades.existsByActivityId(activityId)) {
             throw new ConflictException("ACTIVITY_HAS_GRADES", "The activity has grades and cannot be deleted");
         }
+        Evaluation evaluation = evaluations.findById(activity.getEvaluationId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Evaluation", activity.getEvaluationId()));
         activities.deleteById(activityId);
         evaluations.deleteById(activity.getEvaluationId());
-        audit.success(teacherId, AuditAction.DELETE, "Activity", activityId, null);
+        audit.success(teacherId, AuditAction.DELETE, target(activityId, evaluation), evaluation.getName());
     }
 
     @Override
     public PageResult<ActivityView> search(Long teacherId, Long teachingPeriodId, PageQuery page) {
         guard.requireTeachingPeriod(teacherId, teachingPeriodId);
         return activities.findViewsByTeachingPeriodId(teachingPeriodId, page);
+    }
+
+    static AuditTarget target(Long activityId, Evaluation evaluation) {
+        return AuditTarget.inTeachingPeriod("Activity", activityId, evaluation.getTeachingPeriodId(), evaluation.getName());
     }
 
     private static String blankToNull(String value) {

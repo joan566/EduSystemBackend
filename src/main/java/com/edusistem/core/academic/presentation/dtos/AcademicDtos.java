@@ -6,6 +6,7 @@ import com.edusistem.core.academic.domain.vo.GroupView;
 import com.edusistem.core.academic.domain.vo.ScheduleCalendar;
 import com.edusistem.core.academic.domain.vo.ScheduledClassView;
 import com.edusistem.core.academic.domain.vo.TeachingAssignmentView;
+import com.edusistem.core.academic.domain.vo.TeachingPeriodSummary;
 import com.edusistem.core.academic.domain.vo.TeachingPeriodView;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.Max;
@@ -87,6 +88,18 @@ public final class AcademicDtos {
             return new TeachingPeriodResponse(v.id(), v.teachingAssignmentId(), v.groupId(), v.groupName(),
                     v.gradeName(), v.academicYear(), v.subjectId(), v.subjectName(), v.academicPeriodId(),
                     v.academicPeriodName(), v.startDate(), v.endDate(), v.studentCount());
+        }
+    }
+
+    public record TeachingPeriodSummaryResponse(Long teachingPeriodId, long studentCount, long activityCount,
+                                                long examCount, Grading grading) {
+
+        public record Grading(long expectedGrades, long registeredGrades, int progressPercent) {
+        }
+
+        public static TeachingPeriodSummaryResponse from(TeachingPeriodSummary s) {
+            return new TeachingPeriodSummaryResponse(s.teachingPeriodId(), s.studentCount(), s.activityCount(),
+                    s.examCount(), new Grading(s.expectedGrades(), s.registeredGrades(), s.progressPercent()));
         }
     }
 

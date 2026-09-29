@@ -2,6 +2,8 @@ package com.edusistem.core.student.domain.outputports;
 
 import com.edusistem.core.student.domain.entity.StudentGroup;
 import com.edusistem.core.student.domain.vo.StudentEnrollmentView;
+import com.edusistem.core.student.domain.vo.StudentEnrollmentRow;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,4 +16,6 @@ public interface StudentGroupRepositoryPort {
     boolean existsActive(Long studentId, Long groupId);
 
     List<StudentEnrollmentView> findEnrollmentViews(Long studentId);
+
+    List<StudentEnrollmentRow> findEnrollmentRows(Collection<Long> studentIds);
 }

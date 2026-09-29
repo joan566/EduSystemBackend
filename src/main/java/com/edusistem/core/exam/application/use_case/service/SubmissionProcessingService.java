@@ -2,6 +2,7 @@ package com.edusistem.core.exam.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.exam.application.use_case.dtos.SubmissionCommands;
 import com.edusistem.core.exam.application.use_case.service.ExamContextLoader.ExamContext;
 import com.edusistem.core.exam.domain.entity.Exam;
@@ -93,7 +94,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
             qrText = processor.readQrCode(command.image()).orElse(null);
             student = identifyStudent(command, ctx, qrText);
         } catch (DomainException e) {
-            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, "Exam", command.examId(),
+            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, ExamService.target(command.examId(), ctx.evaluation()),
                     e.getCode() + ": " + e.getMessage());
             throw e;
         }
@@ -101,7 +102,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
         Optional<ExamSubmission> existing = submissions.findByExamIdAndStudentId(exam.getId(), student.getId());
         if (existing.isPresent() && !command.replace() && (existing.get().getStatus() == ExamSubmissionStatus.PROCESSED
                 || existing.get().getStatus() == ExamSubmissionStatus.REVIEW_REQUIRED)) {
-            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, "Exam", command.examId(),
+            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, ExamService.target(command.examId(), ctx.evaluation()),
                     "SUBMISSION_ALREADY_EXISTS for student " + student.getStudentCode());
             throw new ConflictException("SUBMISSION_ALREADY_EXISTS",
                     "This student already has a processed submission; use replace=true to process it again");
@@ -129,11 +130,11 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
         }
 
         ExamSubmission saved = submissions.save(submission);
+        AuditTarget target = SubmissionReviewService.target(saved, ctx, student);
         if (saved.getStatus() == ExamSubmissionStatus.FAILED) {
-            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, "ExamSubmission", saved.getId(),
-                    saved.getStatusDetail());
+            audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, target, saved.getStatusDetail());
         } else {
-            audit.success(command.teacherId(), AuditAction.EXAM_PROCESSED, "ExamSubmission", saved.getId(),
+            audit.success(command.teacherId(), AuditAction.EXAM_PROCESSED, target,
                     "status " + saved.getStatus() + ", score " + saved.getScore() + ", finalGrade " + saved.getFinalGrade());
         }
         return assembler.assemble(saved);

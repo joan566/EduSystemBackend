@@ -2,6 +2,7 @@ package com.edusistem.core.grading.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationCategoryRepositoryPort;
 import com.edusistem.core.grading.application.use_case.dtos.GradingCommands;
 import com.edusistem.core.grading.domain.entity.GradingConfiguration;
@@ -62,10 +63,13 @@ public class GradingConfigurationService implements ConfigureGradingUseCase {
                 .teachingPeriodId(command.teachingPeriodId()).build();
         configuration.setGradingScaleId(scale.getId());
         configuration.setWeights(weights);
+        configuration.setPassingGrade(command.passingGrade());
         configuration.validateForSave();
+        configuration.validatePassingGrade(scale);
         GradingConfiguration saved = configurations.save(configuration);
         audit.success(command.teacherId(), existing == null ? AuditAction.CREATE : AuditAction.UPDATE,
-                "GradingConfiguration", saved.getId(), "total weight " + saved.totalWeight());
+                AuditTarget.inTeachingPeriod("GradingConfiguration", saved.getId(), command.teachingPeriodId(),
+                        "Escala " + scale.getName()), "total weight " + saved.totalWeight());
         return new GradingConfigurationView(saved, scale);
     }
 

@@ -3,6 +3,7 @@ package com.edusistem.core.student.presentation.dtos;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.vo.StudentDetails;
 import com.edusistem.core.student.domain.vo.StudentEnrollmentView;
+import com.edusistem.core.student.domain.vo.StudentListItem;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,6 +27,18 @@ public final class StudentDtos {
         static EnrollmentResponse from(StudentEnrollmentView v) {
             return new EnrollmentResponse(v.groupId(), v.groupName(), v.gradeName(), v.academicYear(), v.enrolledAt(),
                     v.withdrawnAt(), v.active());
+        }
+    }
+
+    /** Listing row: the student plus their current course ({@code currentEnrollment} null if never enrolled). */
+    public record StudentListResponse(Long id, String studentCode, String identificationNumber, String firstName,
+                                      String lastName, String email, EnrollmentResponse currentEnrollment) {
+
+        public static StudentListResponse from(StudentListItem item) {
+            Student s = item.student();
+            return new StudentListResponse(s.getId(), s.getStudentCode(), s.getIdentificationNumber(), s.getFirstName(),
+                    s.getLastName(), s.getEmail(),
+                    item.currentEnrollment() == null ? null : EnrollmentResponse.from(item.currentEnrollment()));
         }
     }
 

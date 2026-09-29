@@ -7,6 +7,7 @@ import com.edusistem.core.audit.domain.enums.AuditResult;
 import com.edusistem.core.audit.domain.inputports.ListAuditLogsUseCase;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.audit.domain.outputports.AuditLogRepositoryPort;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import java.time.Clock;
@@ -18,6 +19,7 @@ public class AuditService implements RecordAuditUseCase, ListAuditLogsUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(AuditService.class);
     private static final int MAX_DETAILS = 4000;
+    private static final int MAX_LABEL = 255;
 
     private final AuditLogRepositoryPort repository;
     private final Clock clock;
@@ -28,17 +30,17 @@ public class AuditService implements RecordAuditUseCase, ListAuditLogsUseCase {
     }
 
     @Override
-    public void success(Long userId, AuditAction action, String entityType, Long entityId, String details) {
-        repository.save(build(userId, action, entityType, entityId, AuditResult.SUCCESS, details));
+    public void success(Long userId, AuditAction action, AuditTarget target, String details) {
+        repository.save(build(userId, action, target, AuditResult.SUCCESS, details));
     }
 
     @Override
-    public void failure(Long userId, AuditAction action, String entityType, Long entityId, String details) {
+    public void failure(Long userId, AuditAction action, AuditTarget target, String details) {
         try {
-            repository.saveIndependently(build(userId, action, entityType, entityId, AuditResult.FAILURE, details));
+            repository.saveIndependently(build(userId, action, target, AuditResult.FAILURE, details));
         } catch (RuntimeException e) {
             // Un fallo de auditoría nunca debe ocultar el error original.
-            log.error("Could not persist failure audit for action {} on {}", action, entityType, e);
+            log.error("Could not persist failure audit for action {} on {}", action, target.entityType(), e);
         }
     }
 
@@ -47,10 +49,14 @@ public class AuditService implements RecordAuditUseCase, ListAuditLogsUseCase {
         return repository.findByUserId(userId, filter, page);
     }
 
-    private AuditLog build(Long userId, AuditAction action, String entityType, Long entityId, AuditResult result,
-                           String details) {
-        String safeDetails = details != null && details.length() > MAX_DETAILS ? details.substring(0, MAX_DETAILS) : details;
-        return AuditLog.builder().userId(userId).action(action).entityType(entityType).entityId(entityId)
-                .result(result).details(safeDetails).createdAt(LocalDateTime.now(clock)).build();
+    private AuditLog build(Long userId, AuditAction action, AuditTarget target, AuditResult result, String details) {
+        return AuditLog.builder().userId(userId).action(action).entityType(target.entityType())
+                .entityId(target.entityId()).teachingPeriodId(target.teachingPeriodId())
+                .entityLabel(truncate(target.label(), MAX_LABEL)).result(result).details(truncate(details, MAX_DETAILS))
+                .createdAt(LocalDateTime.now(clock)).build();
+    }
+
+    private static String truncate(String value, int max) {
+        return value != null && value.length() > max ? value.substring(0, max) : value;
     }
 }

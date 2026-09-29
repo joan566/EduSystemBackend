@@ -2,6 +2,7 @@ package com.edusistem.core.exam.application.use_case.service;
 
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.exam.application.use_case.dtos.SubmissionCommands;
 import com.edusistem.core.exam.application.use_case.service.ExamContextLoader.ExamContext;
 import com.edusistem.core.exam.domain.entity.ExamAnswer;
@@ -25,6 +26,8 @@ import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
+import com.edusistem.core.student.domain.entity.Student;
+import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
@@ -40,17 +43,20 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
     private final ExamSubmissionRepositoryPort submissions;
     private final SubmissionDetailsAssembler assembler;
     private final OwnershipGuard guard;
+    private final StudentRepositoryPort students;
     private final RecordAuditUseCase audit;
     private final FileStoragePort storage;
     private final Clock clock;
 
     public SubmissionReviewService(ExamContextLoader loader, ExamSubmissionRepositoryPort submissions,
                                    SubmissionDetailsAssembler assembler, OwnershipGuard guard,
-                                   RecordAuditUseCase audit, FileStoragePort storage, Clock clock) {
+                                   StudentRepositoryPort students, RecordAuditUseCase audit, FileStoragePort storage,
+                                   Clock clock) {
         this.loader = loader;
         this.submissions = submissions;
         this.assembler = assembler;
         this.guard = guard;
+        this.students = students;
         this.audit = audit;
         this.storage = storage;
         this.clock = clock;
@@ -117,7 +123,7 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
         refreshStatus(submission);
         ExamSubmission saved = submissions.save(submission);
 
-        audit.success(command.teacherId(), AuditAction.ANSWER_UPDATED, "ExamSubmission", saved.getId(),
+        audit.success(command.teacherId(), AuditAction.ANSWER_UPDATED, target(saved, ctx),
                 "Q" + question.getQuestionNumber() + ": " + before + " -> " + describe(answer)
                         + "; score " + scoreBefore + " -> " + saved.getScore()
                         + "; finalGrade " + gradeBefore + " -> " + saved.getFinalGrade() + reason(command.reason()));
@@ -140,10 +146,22 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
         submission.setFinalGrade(command.finalGrade().setScale(2, RoundingMode.HALF_UP));
         submission.setProcessedAt(LocalDateTime.now(clock));
         ExamSubmission saved = submissions.save(submission);
-        audit.success(command.teacherId(), AuditAction.GRADE_UPDATED, "ExamSubmission", saved.getId(),
+        audit.success(command.teacherId(), AuditAction.GRADE_UPDATED, target(saved, ctx),
                 "finalGrade " + before + " -> " + saved.getFinalGrade() + " (score " + saved.getScore() + ")"
                         + reason(command.reason()));
         return assembler.assemble(saved);
+    }
+
+    private AuditTarget target(ExamSubmission submission, ExamContext ctx) {
+        return target(submission, ctx, students.findById(submission.getStudentId()).orElse(null));
+    }
+
+    /** "Parcial 1 · Ana Pérez". */
+    static AuditTarget target(ExamSubmission submission, ExamContext ctx, Student student) {
+        String studentName = student == null ? submission.getStudentCode()
+                : student.getFirstName() + " " + student.getLastName();
+        return AuditTarget.inTeachingPeriod("ExamSubmission", submission.getId(),
+                ctx.evaluation().getTeachingPeriodId(), AuditTarget.label(ctx.evaluation().getName(), studentName));
     }
 
     private ExamSubmission findSubmission(Long examId, Long submissionId) {

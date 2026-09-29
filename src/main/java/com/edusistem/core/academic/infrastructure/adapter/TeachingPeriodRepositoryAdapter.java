@@ -2,6 +2,7 @@ package com.edusistem.core.academic.infrastructure.adapter;
 
 import com.edusistem.core.academic.domain.entity.TeachingPeriod;
 import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPort;
+import com.edusistem.core.academic.domain.vo.TeachingPeriodSummary;
 import com.edusistem.core.academic.domain.vo.TeachingPeriodView;
 import com.edusistem.core.academic.infrastructure.mapper.AcademicMapper;
 import com.edusistem.core.academic.infrastructure.repository.SpringDataTeachingPeriodRepository;
@@ -55,6 +56,35 @@ public class TeachingPeriodRepositoryAdapter implements TeachingPeriodRepository
                                                                Long academicPeriodId, PageQuery page) {
         return PageMapper.toResult(repository.findViewsByTeacher(teacherId, teachingAssignmentId, academicPeriodId,
                 PageMapper.pageable(page)), v -> v);
+    }
+
+    /** Sólo cuentan las notas de estudiantes activos del grupo, igual que las esperadas. */
+    @Override
+    public TeachingPeriodSummary summarize(Long teachingPeriodId) {
+        Object[] row = (Object[]) em.createNativeQuery("""
+                with active as (
+                    select sg.student_id from student_groups sg
+                    join teaching_assignments ta on ta.group_id = sg.group_id
+                    join teaching_periods tp on tp.teaching_assignment_id = ta.id
+                    where tp.id = :id and sg.active = true),
+                period_activities as (
+                    select a.id from activities a join evaluations e on e.id = a.evaluation_id
+                    where e.teaching_period_id = :id),
+                period_exams as (
+                    select x.id from exams x join evaluations e on e.id = x.evaluation_id
+                    where e.teaching_period_id = :id)
+                select (select count(*) from active),
+                       (select count(*) from period_activities),
+                       (select count(*) from period_exams),
+                       (select count(*) from activity_grades ag
+                        where ag.activity_id in (select id from period_activities)
+                          and ag.student_id in (select student_id from active))
+                     + (select count(*) from exam_submissions s
+                        where s.exam_id in (select id from period_exams) and s.final_grade is not null
+                          and s.student_id in (select student_id from active))
+                """).setParameter("id", teachingPeriodId).getSingleResult();
+        return TeachingPeriodSummary.of(teachingPeriodId, ((Number) row[0]).longValue(), ((Number) row[1]).longValue(),
+                ((Number) row[2]).longValue(), ((Number) row[3]).longValue());
     }
 
     @Override

@@ -11,12 +11,16 @@ import com.edusistem.core.academic.domain.outputports.TeachingPeriodScheduleRepo
 import com.edusistem.core.academic.domain.vo.ScheduledClassView;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.audit.domain.vo.AuditTarget;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
+import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 public class TeachingPeriodScheduleService implements ManageTeachingPeriodScheduleUseCase {
 
@@ -24,6 +28,9 @@ public class TeachingPeriodScheduleService implements ManageTeachingPeriodSchedu
             .comparing(ScheduledClassView::dayOfWeek)
             .thenComparing(ScheduledClassView::startTime)
             .thenComparing(ScheduledClassView::scheduleId);
+
+    private static final Locale SPANISH = Locale.forLanguageTag("es");
+    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final TeachingPeriodScheduleRepositoryPort schedules;
     private final TeachingPeriodRepositoryPort teachingPeriods;
@@ -55,7 +62,7 @@ public class TeachingPeriodScheduleService implements ManageTeachingPeriodSchedu
         TeachingPeriodSchedule schedule = TeachingPeriodSchedule.builder().teachingPeriodId(command.teachingPeriodId())
                 .build();
         TeachingPeriodSchedule saved = apply(command, schedule);
-        audit.success(command.teacherId(), AuditAction.CREATE, "TeachingPeriodSchedule", saved.getId(), null);
+        audit.success(command.teacherId(), AuditAction.CREATE, target(saved), null);
         return view(saved.getId());
     }
 
@@ -65,16 +72,16 @@ public class TeachingPeriodScheduleService implements ManageTeachingPeriodSchedu
         TeachingPeriodSchedule schedule = requireOwned(command.teacherId(), command.teachingPeriodId(),
                 command.scheduleId());
         apply(command, schedule);
-        audit.success(command.teacherId(), AuditAction.UPDATE, "TeachingPeriodSchedule", schedule.getId(), null);
+        audit.success(command.teacherId(), AuditAction.UPDATE, target(schedule), null);
         return view(schedule.getId());
     }
 
     @Override
     @UseCaseTransactional
     public void delete(Long teacherId, Long teachingPeriodId, Long scheduleId) {
-        requireOwned(teacherId, teachingPeriodId, scheduleId);
+        TeachingPeriodSchedule schedule = requireOwned(teacherId, teachingPeriodId, scheduleId);
         schedules.deleteById(scheduleId);
-        audit.success(teacherId, AuditAction.DELETE, "TeachingPeriodSchedule", scheduleId, null);
+        audit.success(teacherId, AuditAction.DELETE, target(schedule), null);
     }
 
     private TeachingPeriodSchedule apply(AcademicCommands.SaveSchedule command, TeachingPeriodSchedule schedule) {
@@ -106,6 +113,15 @@ public class TeachingPeriodScheduleService implements ManageTeachingPeriodSchedu
         return schedules.findById(scheduleId)
                 .filter(s -> s.getTeachingPeriodId().equals(teachingPeriodId))
                 .orElseThrow(() -> ResourceNotFoundException.of("TeachingPeriodSchedule", scheduleId));
+    }
+
+    /** "Lunes 08:00-09:30". */
+    private static AuditTarget target(TeachingPeriodSchedule schedule) {
+        String day = schedule.getDayOfWeek().getDisplayName(TextStyle.FULL, SPANISH);
+        String label = Character.toUpperCase(day.charAt(0)) + day.substring(1) + " "
+                + schedule.getStartTime().format(HH_MM) + "-" + schedule.getEndTime().format(HH_MM);
+        return AuditTarget.inTeachingPeriod("TeachingPeriodSchedule", schedule.getId(),
+                schedule.getTeachingPeriodId(), label);
     }
 
     private ScheduledClassView view(Long scheduleId) {

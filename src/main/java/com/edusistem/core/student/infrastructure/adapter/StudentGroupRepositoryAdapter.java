@@ -6,6 +6,8 @@ import com.edusistem.core.student.domain.vo.StudentEnrollmentView;
 import com.edusistem.core.student.infrastructure.entity.StudentGroupId;
 import com.edusistem.core.student.infrastructure.mapper.StudentMapper;
 import com.edusistem.core.student.infrastructure.repository.SpringDataStudentGroupRepository;
+import com.edusistem.core.student.domain.vo.StudentEnrollmentRow;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -42,5 +44,10 @@ public class StudentGroupRepositoryAdapter implements StudentGroupRepositoryPort
     @Override
     public List<StudentEnrollmentView> findEnrollmentViews(Long studentId) {
         return repository.findEnrollmentViews(studentId);
+    }
+
+    @Override
+    public List<StudentEnrollmentRow> findEnrollmentRows(Collection<Long> studentIds) {
+        return studentIds.isEmpty() ? List.of() : repository.findEnrollmentRows(studentIds);
     }
 }

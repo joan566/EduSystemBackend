@@ -20,6 +20,8 @@ public class AuditLog {
     private AuditAction action;
     private String entityType;
     private Long entityId;
+    private Long teachingPeriodId;
+    private String entityLabel;
     private AuditResult result;
     private String details;
     private LocalDateTime createdAt;

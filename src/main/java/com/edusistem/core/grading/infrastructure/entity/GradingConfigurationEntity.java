@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,4 +28,7 @@ public class GradingConfigurationEntity extends AuditableEntity {
 
     @Column(name = "grading_scale_id", nullable = false)
     private Long gradingScaleId;
+
+    @Column(name = "passing_grade", precision = 6, scale = 2)
+    private BigDecimal passingGrade;
 }

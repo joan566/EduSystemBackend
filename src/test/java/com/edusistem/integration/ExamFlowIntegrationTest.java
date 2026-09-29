@@ -128,6 +128,11 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         assertThat(exam.get("ready").asBoolean()).isTrue();
         assertThat(exam.get("optionCount").asInt()).isEqualTo(4);
         assertThat(exam.get("maximumScore").decimalValue()).isEqualByComparingTo("5");
+        post(t, "/api/v1/exams", Map.of("teachingPeriodId", c.teachingPeriodId(), "name", "Sin preguntas",
+                "numberOfQuestions", 5), 201);
+        JsonNode listed = get(t, "/api/v1/exams?teachingPeriodId=" + c.teachingPeriodId(), 200).get("content");
+        assertThat(listed).extracting(e -> e.get("name").asText() + ":" + e.get("ready").asBoolean())
+                .containsExactlyInAnyOrder("Parcial 1:true", "Sin preguntas:false");
         JsonNode q1 = exam.get("questions").get(0);
         assertThat(q1.get("correctOption").asText()).isEqualTo("A");
         assertThat(q1.get("points").decimalValue()).isEqualByComparingTo("0.5"); // 5 puntos / 10 preguntas
@@ -684,5 +689,49 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         long exam2 = createExam(f.teacher(), c2, "Sin escala");
         BufferedImage sheet2 = SheetImages.render(sheetPdf(f.teacher(), exam2, f.students().get(0)), 0, DPI);
         assertError(parse(submit(f.teacher(), exam2, sheet2, Map.of()), 422), 422, "GRADING_CONFIGURATION_REQUIRED");
+    }
+
+    @Test
+    void summaryCountsActivityGradesAndGradedExamsAndRecentActivityIsFilteredByClass() {
+        ExamFixture f = fixture();
+        long tp = f.context().teachingPeriodId();
+        Student s = f.students().get(0);
+        String studentName = jdbc.queryForObject("select first_name || ' ' || last_name from students where id = ?",
+                String.class, s.id());
+        String examName = get(f.teacher(), "/api/v1/exams/" + f.examId(), 200).get("name").asText();
+
+        long activity = post(f.teacher(), "/api/v1/activities", Map.of("teachingPeriodId", tp, "name", "Taller 1",
+                "maximumScore", 5), 201).get("id").asLong();
+        put(f.teacher(), "/api/v1/activities/" + activity + "/grades",
+                Map.of("grades", List.of(Map.of("studentId", s.id(), "grade", 4))), 200);
+        long submission = submitOk(f, s, correctChoices()).get("id").asLong();
+
+        JsonNode summary = get(f.teacher(), "/api/v1/teaching-periods/" + tp + "/summary", 200);
+        assertThat(summary.get("teachingPeriodId").asLong()).isEqualTo(tp);
+        assertThat(summary.get("studentCount").asInt()).isEqualTo(3);
+        assertThat(summary.get("activityCount").asInt()).isEqualTo(1);
+        assertThat(summary.get("examCount").asInt()).isEqualTo(1);
+        assertThat(summary.get("grading").get("expectedGrades").asInt()).isEqualTo(6);
+        assertThat(summary.get("grading").get("registeredGrades").asInt()).isEqualTo(2);
+        assertThat(summary.get("grading").get("progressPercent").asInt()).isEqualTo(33);
+        assertError(get(newTeacher(), "/api/v1/teaching-periods/" + tp + "/summary", 404), 404, "RESOURCE_NOT_FOUND");
+
+        Context empty = newContext(f.teacher());
+        JsonNode emptySummary = get(f.teacher(), "/api/v1/teaching-periods/" + empty.teachingPeriodId() + "/summary", 200);
+        assertThat(emptySummary.get("grading").get("expectedGrades").asInt()).isZero();
+        assertThat(emptySummary.get("grading").get("progressPercent").asInt()).isZero();
+
+        // actividad reciente de la clase, con nombres legibles
+        JsonNode recent = get(f.teacher(), "/api/v1/audit-logs?size=50&teachingPeriodId=" + tp, 200).get("content");
+        List<String> labels = new ArrayList<>();
+        recent.forEach(log -> {
+            assertThat(log.get("teachingPeriodId").asLong()).isEqualTo(tp);
+            labels.add(log.get("entityType").asText() + "|" + log.get("entityLabel").asText());
+        });
+        assertThat(labels).contains("ExamSubmission|" + examName + " · " + studentName,
+                "Activity|Taller 1 · " + studentName, "Activity|Taller 1", "Exam|" + examName);
+        assertThat(recent.toString()).contains("\"entityId\":" + submission);
+        assertThat(get(f.teacher(), "/api/v1/audit-logs?teachingPeriodId=" + empty.teachingPeriodId()
+                + "&entityType=ExamSubmission", 200).get("content")).isEmpty();
     }
 }
