@@ -163,6 +163,39 @@ class EvaluationsIntegrationTest extends IntegrationTest {
     }
 
     @Test
+    void attendanceOfADayReturnsTheSessionOrTheRosterWithoutRecords() {
+        Teacher t = newTeacher();
+        Context c = newContext(t);
+        List<Student> roster = importStudents(t, c, 2);
+        String day = "/api/v1/attendance-sessions/day?teachingPeriodId=" + c.teachingPeriodId() + "&date=";
+
+        JsonNode none = get(t, day + YEAR + "-04-06", 200);
+        assertThat(none.get("session").isNull()).isTrue();
+        assertThat(none.get("students").size()).isEqualTo(2);
+        assertThat(none.get("students").get(0).get("status").isNull()).isTrue();
+
+        long session = post(t, "/api/v1/attendance-sessions", Map.of("teachingPeriodId", c.teachingPeriodId(),
+                "sessionDate", YEAR + "-04-06"), 201).get("id").asLong();
+        put(t, "/api/v1/attendance-sessions/" + session + "/records", Map.of("records", List.of(
+                Map.of("studentId", roster.get(0).id(), "status", "ABSENT", "observation", "cita médica"))), 200);
+
+        JsonNode withSession = get(t, day + YEAR + "-04-06", 200);
+        assertThat(withSession.get("session").get("id").asLong()).isEqualTo(session);
+        JsonNode first = null;
+        for (JsonNode student : withSession.get("students")) {
+            if (student.get("studentId").asLong() == roster.get(0).id()) {
+                first = student;
+            }
+        }
+        assertThat(first.get("status").asText()).isEqualTo("ABSENT");
+        assertThat(first.get("observation").asText()).isEqualTo("cita médica");
+        assertThat(get(t, day + YEAR + "-04-07", 200).get("session").isNull()).isTrue();
+
+        Teacher other = newTeacher();
+        assertError(get(other, day + YEAR + "-04-06", 404), 404, "RESOURCE_NOT_FOUND");
+    }
+
+    @Test
     void evaluationsAreListedWithTheirSpecializationAndPagination() {
         Teacher t = newTeacher();
         Context c = newContext(t);

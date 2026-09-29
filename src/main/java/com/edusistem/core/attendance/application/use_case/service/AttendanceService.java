@@ -30,6 +30,7 @@ import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentGroupRepositoryPort;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -144,6 +145,23 @@ public class AttendanceService implements ManageAttendanceUseCase {
         evaluations.deleteById(session.getEvaluationId());
         audit.success(teacherId, AuditAction.DELETE,
                 target(sessionId, evaluation.getTeachingPeriodId(), evaluation.getName()), evaluation.getName());
+    }
+
+    @Override
+    public AttendanceSessionDetails getDay(Long teacherId, Long teachingPeriodId, LocalDate date) {
+        guard.requireTeachingPeriod(teacherId, teachingPeriodId);
+        if (date == null) {
+            throw new InvalidRequestException("INVALID_SESSION_DATE", "date is required");
+        }
+        var session = sessions.findLatestViewByTeachingPeriodIdAndDate(teachingPeriodId, date);
+        if (session.isPresent()) {
+            return details(session.get().sessionId());
+        }
+        TeachingPeriodView period = teachingPeriods.findViewById(teachingPeriodId).orElseThrow();
+        List<StudentAttendanceView> views = students.findActiveByGroupId(period.groupId()).stream()
+                .map(s -> new StudentAttendanceView(s.getId(), s.getStudentCode(), s.fullName(), null, null))
+                .toList();
+        return new AttendanceSessionDetails(null, views);
     }
 
     @Override

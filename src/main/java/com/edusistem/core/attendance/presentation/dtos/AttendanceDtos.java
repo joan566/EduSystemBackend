@@ -50,7 +50,7 @@ public final class AttendanceDtos {
     public record SessionDetailResponse(SessionResponse session, List<StudentAttendanceResponse> students) {
 
         public static SessionDetailResponse from(AttendanceSessionDetails d) {
-            return new SessionDetailResponse(SessionResponse.from(d.session()),
+            return new SessionDetailResponse(d.session() == null ? null : SessionResponse.from(d.session()),
                     d.students().stream().map(StudentAttendanceResponse::from).toList());
         }
     }

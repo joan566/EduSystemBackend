@@ -8,7 +8,9 @@ import com.edusistem.core.attendance.infrastructure.repository.SpringDataAttenda
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.infrastructure.adapter.PageMapper;
+import java.time.LocalDate;
 import java.util.Optional;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -40,6 +42,12 @@ public class AttendanceSessionRepositoryAdapter implements AttendanceSessionRepo
     @Override
     public PageResult<AttendanceSessionView> findViewsByTeachingPeriodId(Long teachingPeriodId, PageQuery page) {
         return PageMapper.toResult(repository.findViews(teachingPeriodId, PageMapper.pageable(page)), v -> v);
+    }
+
+    @Override
+    public Optional<AttendanceSessionView> findLatestViewByTeachingPeriodIdAndDate(Long teachingPeriodId,
+                                                                                  LocalDate date) {
+        return repository.findViewsOnDate(teachingPeriodId, date, PageRequest.of(0, 1)).stream().findFirst();
     }
 
     @Override

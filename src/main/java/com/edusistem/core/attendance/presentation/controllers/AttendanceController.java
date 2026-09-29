@@ -12,6 +12,8 @@ import com.edusistem.core.shared.presentation.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -53,6 +55,15 @@ public class AttendanceController {
                                               @RequestParam(required = false) Integer size) {
         return PageResponse.from(attendance.search(user.id(), teachingPeriodId, PageQuery.of(page, size)),
                 SessionResponse::from);
+    }
+
+    @GetMapping("/day")
+    @Operation(summary = "Asistencia de una clase en una fecha: la sesión de ese día o, si no existe, el grupo sin "
+            + "registros y session nulo")
+    public SessionDetailResponse day(@AuthenticationPrincipal AuthenticatedUser user,
+                                     @RequestParam Long teachingPeriodId,
+                                     @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return SessionDetailResponse.from(attendance.getDay(user.id(), teachingPeriodId, date));
     }
 
     @GetMapping("/{id}")

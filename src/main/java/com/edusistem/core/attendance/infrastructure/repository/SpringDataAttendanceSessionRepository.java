@@ -2,6 +2,8 @@ package com.edusistem.core.attendance.infrastructure.repository;
 
 import com.edusistem.core.attendance.domain.vo.AttendanceSessionView;
 import com.edusistem.core.attendance.infrastructure.entity.AttendanceSessionEntity;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,4 +29,10 @@ public interface SpringDataAttendanceSessionRepository extends JpaRepository<Att
                     select count(s) from AttendanceSessionEntity s join EvaluationEntity e on e.id = s.evaluationId
                     where e.teachingPeriodId = :teachingPeriodId""")
     Page<AttendanceSessionView> findViews(@Param("teachingPeriodId") Long teachingPeriodId, Pageable pageable);
+
+    @Query(VIEW_SELECT + """
+            where e.teachingPeriodId = :teachingPeriodId and s.sessionDate = :date
+            order by s.id desc""")
+    List<AttendanceSessionView> findViewsOnDate(@Param("teachingPeriodId") Long teachingPeriodId,
+                                                @Param("date") LocalDate date, Pageable pageable);
 }

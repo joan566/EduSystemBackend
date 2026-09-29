@@ -63,8 +63,18 @@ Las reglas se pueden comprobar con `grep`: el paquete `domain` no importa `org.s
 
 Migraciones Flyway en `src/main/resources/db/migration`:
 
-* `V1`–`V27`: exactamente el DBML entregado (orden de dependencias, uniques, índices, tipos) + datos de referencia (roles `TEACHER`/`ADMIN`, categorías `EXAMS`/`ACTIVITIES`/`ATTENDANCE`, escalas 0-5, 0-10, 0-100).
-* `V28`–`V35`: **extensiones fuera del DBML** (ver "Decisiones"): `audit_logs`, `password_reset_tokens`, `exam_answers.detection_status`, `exam_submissions.status_detail`, secuencia `student_code_seq`, índices en claves foráneas, `users.token_version` y `refresh_tokens`.
+* `V1__create_identity_and_auth`: `users`, `roles`, `user_roles`, `password_reset_tokens`, `refresh_tokens`.
+* `V2__create_academic_structure`: `grades`, `groups`, `subjects`, `teaching_assignments`, `academic_periods`, `teaching_periods`, `teaching_period_schedules`.
+* `V3__create_students`: `students`, `student_groups` y la secuencia `student_code_seq`.
+* `V4__create_grading`: `grading_scales`, `evaluation_categories`, `grading_configurations`, `grading_weights`.
+* `V5__create_evaluations_and_gradebook`: `evaluations`, `rubric_criteria`, `rubric_scores`, `grade_attachments`, `student_observations`.
+* `V6__create_exams`: `exams`, `exam_questions`, `exam_question_options`, `exam_submissions`, `exam_answers`, `exam_submission_batches`, `exam_submission_batch_pages`.
+* `V7__create_activities_and_attendance`: `activities`, `activity_grades`, `attendance_sessions`, `attendance_records`.
+* `V8__create_imports_and_audit`: `import_batches`, `audit_logs`.
+* `V9__seed_reference_data`: roles `TEACHER`/`ADMIN`, categorías `EXAMS`/`ACTIVITIES`/`ATTENDANCE`, escalas 0-5, 0-10, 0-100.
+
+Cada tabla se crea con su forma final e índices sobre sus claves foráneas. Los cambios de esquema posteriores al
+lanzamiento van en migraciones nuevas (`V10__...`); nunca se editan las ya publicadas.
 
 ## Endpoints (`/api/v1`)
 
