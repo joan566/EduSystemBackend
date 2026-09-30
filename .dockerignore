@@ -1,0 +1,14 @@
+# Solo pom.xml y src/ entran en la imagen; lo demás se excluye (secretos, datos locales y artefactos).
+.env
+.env.*
+!.env.example
+storage/
+backups/
+target/
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+Dockerfile
+.dockerignore
