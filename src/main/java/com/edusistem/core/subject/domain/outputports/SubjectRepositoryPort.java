@@ -11,9 +11,9 @@ public interface SubjectRepositoryPort {
 
     Optional<Subject> findById(Long id);
 
-    Optional<Subject> findByName(String name);
+    Optional<Subject> findByTeacherIdAndName(Long teacherId, String name);
 
-    PageResult<Subject> search(String nameQuery, PageQuery page);
+    PageResult<Subject> search(Long teacherId, String nameQuery, PageQuery page);
 
     boolean hasTeachingAssignments(Long subjectId);
 

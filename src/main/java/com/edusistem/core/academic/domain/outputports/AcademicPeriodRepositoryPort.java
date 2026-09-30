@@ -11,9 +11,9 @@ public interface AcademicPeriodRepositoryPort {
 
     Optional<AcademicPeriod> findById(Long id);
 
-    Optional<AcademicPeriod> findByName(String name);
+    Optional<AcademicPeriod> findByTeacherIdAndName(Long teacherId, String name);
 
-    PageResult<AcademicPeriod> findAll(PageQuery page);
+    PageResult<AcademicPeriod> findByTeacherId(Long teacherId, PageQuery page);
 
     boolean hasTeachingPeriods(Long academicPeriodId);
 

@@ -40,11 +40,11 @@ public class OwnershipGuard {
     }
 
     public void requireGroup(Long teacherId, Long groupId) {
-        check(ownership.teachesGroup(teacherId, groupId), "Group", groupId);
+        check(ownership.ownsGroup(teacherId, groupId), "Group", groupId);
     }
 
     public void requireStudent(Long teacherId, Long studentId) {
-        check(ownership.teachesStudent(teacherId, studentId), "Student", studentId);
+        check(ownership.ownsStudent(teacherId, studentId), "Student", studentId);
     }
 
     private void check(boolean owned, String resource, Long id) {

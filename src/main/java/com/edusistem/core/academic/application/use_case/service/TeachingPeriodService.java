@@ -47,7 +47,7 @@ public class TeachingPeriodService implements ManageTeachingPeriodUseCase {
         if (!assignment.isActive()) {
             throw new BusinessRuleException("TEACHING_ASSIGNMENT_INACTIVE", "The teaching assignment is not active");
         }
-        academicPeriods.findById(command.academicPeriodId())
+        academicPeriods.findById(command.academicPeriodId()).filter(p -> p.getTeacherId().equals(command.teacherId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("AcademicPeriod", command.academicPeriodId()));
         teachingPeriods.findByTeachingAssignmentIdAndAcademicPeriodId(command.teachingAssignmentId(),
                 command.academicPeriodId()).ifPresent(tp -> {

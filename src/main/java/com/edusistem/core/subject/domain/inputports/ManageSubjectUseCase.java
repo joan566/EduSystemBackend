@@ -11,9 +11,9 @@ public interface ManageSubjectUseCase {
 
     Subject update(SubjectCommands.Update command);
 
-    void delete(Long actorId, Long subjectId);
+    void delete(Long teacherId, Long subjectId);
 
-    Subject get(Long subjectId);
+    Subject get(Long teacherId, Long subjectId);
 
-    PageResult<Subject> search(String nameQuery, PageQuery page);
+    PageResult<Subject> search(Long teacherId, String nameQuery, PageQuery page);
 }

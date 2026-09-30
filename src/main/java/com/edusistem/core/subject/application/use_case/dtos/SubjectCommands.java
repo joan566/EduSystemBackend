@@ -5,9 +5,9 @@ public final class SubjectCommands {
     private SubjectCommands() {
     }
 
-    public record Create(Long actorId, String name, String description) {
+    public record Create(Long teacherId, String name, String description) {
     }
 
-    public record Update(Long actorId, Long subjectId, String name, String description) {
+    public record Update(Long teacherId, Long subjectId, String name, String description) {
     }
 }

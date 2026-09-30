@@ -6,14 +6,14 @@ public final class StudentCommands {
     }
 
     /** {@code studentCode} es opcional: si es nulo se genera uno. */
-    public record Create(String identificationNumber, String studentCode, String firstName, String lastName,
+    public record Create(Long teacherId, String identificationNumber, String studentCode, String firstName, String lastName,
                          String email) {
     }
 
-    public record Update(Long studentId, String firstName, String lastName, String email) {
+    public record Update(Long teacherId, Long studentId, String firstName, String lastName, String email) {
     }
 
-    public record Enroll(Long studentId, Long groupId) {
+    public record Enroll(Long teacherId, Long studentId, Long groupId) {
     }
 
     public record Withdraw(Long teacherId, Long studentId, Long groupId) {

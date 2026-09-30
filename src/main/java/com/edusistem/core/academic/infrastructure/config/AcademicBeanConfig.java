@@ -15,7 +15,6 @@ import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPo
 import com.edusistem.core.academic.domain.outputports.TeachingPeriodScheduleRepositoryPort;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
-import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
 import java.time.Clock;
 import java.time.ZoneId;
@@ -27,20 +26,18 @@ import org.springframework.context.annotation.Configuration;
 public class AcademicBeanConfig {
 
     @Bean
-    AcademicPeriodService academicPeriodService(AcademicPeriodRepositoryPort periods, CatalogUsagePort usage,
-                                                RecordAuditUseCase audit) {
-        return new AcademicPeriodService(periods, usage, audit);
+    AcademicPeriodService academicPeriodService(AcademicPeriodRepositoryPort periods, RecordAuditUseCase audit) {
+        return new AcademicPeriodService(periods, audit);
     }
 
     @Bean
-    GradeService gradeService(GradeRepositoryPort grades, CatalogUsagePort usage, RecordAuditUseCase audit) {
-        return new GradeService(grades, usage, audit);
+    GradeService gradeService(GradeRepositoryPort grades, RecordAuditUseCase audit) {
+        return new GradeService(grades, audit);
     }
 
     @Bean
-    GroupService groupService(GroupRepositoryPort groups, GradeRepositoryPort grades, CatalogUsagePort usage,
-                              RecordAuditUseCase audit) {
-        return new GroupService(groups, grades, usage, audit);
+    GroupService groupService(GroupRepositoryPort groups, GradeRepositoryPort grades, RecordAuditUseCase audit) {
+        return new GroupService(groups, grades, audit);
     }
 
     @Bean

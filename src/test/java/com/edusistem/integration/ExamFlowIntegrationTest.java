@@ -355,7 +355,8 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         Student s = f.students().get(0);
         JsonNode first = submitOk(f, s, correctChoices());
         BufferedImage retake = answeredSheet(f, s, correctExcept(1, 2));
-
+        String firstImage = jdbc.queryForObject("select image_path from exam_submissions where id = ?", String.class,
+                first.get("id").asLong());
         assertError(parse(submit(f.teacher(), f.examId(), retake, Map.of()), 409), 409, "SUBMISSION_ALREADY_EXISTS");
         assertThat(get(f.teacher(), "/api/v1/exams/" + f.examId() + "/submissions/" + first.get("id").asLong(), 200)
                 .get("score").decimalValue()).isEqualByComparingTo("5.00"); // intacta
@@ -363,6 +364,10 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         JsonNode replaced = parse(submit(f.teacher(), f.examId(), retake, Map.of("replace", "true")), 201);
         assertThat(replaced.get("id").asLong()).isEqualTo(first.get("id").asLong());
         assertThat(replaced.get("score").decimalValue()).isEqualByComparingTo("4.00");
+        // la foto anterior no queda huérfana en disco
+        assertThat(storage.exists(firstImage)).isFalse();
+        assertThat(storage.exists(jdbc.queryForObject("select image_path from exam_submissions where id = ?", String.class,
+                first.get("id").asLong()))).isTrue();
         assertThat(jdbc.queryForObject("select count(*) from exam_submissions where exam_id = ? and student_id = ?", Integer.class,
                 f.examId(), s.id())).isEqualTo(1);
         assertThat(jdbc.queryForObject("select count(*) from exam_answers where submission_id = ?", Integer.class,
@@ -733,5 +738,28 @@ class ExamFlowIntegrationTest extends IntegrationTest {
         assertThat(recent.toString()).contains("\"entityId\":" + submission);
         assertThat(get(f.teacher(), "/api/v1/audit-logs?teachingPeriodId=" + empty.teachingPeriodId()
                 + "&entityType=ExamSubmission", 200).get("content")).isEmpty();
+    }
+
+    @Test
+    void erasingAStudentOrTheAccountRemovesAnswerSheetsAndTheirImages() {
+        ExamFixture f = fixture();
+        Student erased = f.students().get(0);
+        Student kept = f.students().get(1);
+        long erasedSubmission = submitOk(f, erased, correctChoices()).get("id").asLong();
+        submitOk(f, kept, correctChoices());
+        String erasedImage = jdbc.queryForObject("select image_path from exam_submissions where id = ?", String.class,
+                erasedSubmission);
+        String keptImage = jdbc.queryForObject("select image_path from exam_submissions where student_id = ?", String.class,
+                kept.id());
+
+        call("DELETE", f.teacher(), "/api/v1/students/" + erased.id(), null, 204);
+        assertThat(jdbc.queryForObject("select count(*) from exam_answers where submission_id = ?", Integer.class,
+                erasedSubmission)).isZero();
+        assertThat(storage.exists(erasedImage)).isFalse();
+        assertThat(storage.exists(keptImage)).isTrue();
+
+        call("DELETE", f.teacher(), "/api/v1/auth/account", Map.of("password", PASSWORD), 204);
+        assertThat(jdbc.queryForObject("select count(*) from exams where id = ?", Integer.class, f.examId())).isZero();
+        assertThat(storage.exists(keptImage)).isFalse();
     }
 }

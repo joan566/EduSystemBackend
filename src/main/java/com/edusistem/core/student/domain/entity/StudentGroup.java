@@ -16,6 +16,8 @@ import lombok.Setter;
 public class StudentGroup {
     private Long studentId;
     private Long groupId;
+    /** Profesor dueño del estudiante y del grupo (deben coincidir). */
+    private Long teacherId;
     private LocalDateTime enrolledAt;
     private LocalDateTime withdrawnAt;
     private boolean active;

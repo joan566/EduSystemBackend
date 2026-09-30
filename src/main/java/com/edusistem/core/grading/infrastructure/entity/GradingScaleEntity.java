@@ -23,6 +23,9 @@ public class GradingScaleEntity extends CreatedAtEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "teacher_id", updatable = false)
+    private Long teacherId;
+
     @Column(nullable = false, length = 100)
     private String name;
 

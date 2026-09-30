@@ -45,18 +45,19 @@ public class GroupController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista paginada de grupos (filtros por grado y año)")
-    public PageResponse<GroupResponse> list(@RequestParam(required = false) Long gradeId,
+    @Operation(summary = "Lista paginada de los grupos del profesor (filtros por grado y año)")
+    public PageResponse<GroupResponse> list(@AuthenticationPrincipal AuthenticatedUser user,
+                                            @RequestParam(required = false) Long gradeId,
                                             @RequestParam(required = false) Integer academicYear,
                                             @RequestParam(required = false) Integer page,
                                             @RequestParam(required = false) Integer size) {
-        return PageResponse.from(groups.search(gradeId, academicYear, PageQuery.of(page, size)), GroupResponse::from);
+        return PageResponse.from(groups.search(user.id(), gradeId, academicYear, PageQuery.of(page, size)), GroupResponse::from);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Consulta un grupo")
-    public GroupResponse get(@PathVariable Long id) {
-        return GroupResponse.from(groups.get(id));
+    public GroupResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return GroupResponse.from(groups.get(user.id(), id));
     }
 
     @PutMapping("/{id}")

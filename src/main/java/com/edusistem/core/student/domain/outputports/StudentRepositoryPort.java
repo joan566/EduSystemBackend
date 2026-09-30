@@ -12,11 +12,11 @@ public interface StudentRepositoryPort {
 
     Optional<Student> findById(Long id);
 
-    Optional<Student> findByStudentCode(String studentCode);
+    Optional<Student> findByTeacherIdAndStudentCode(Long teacherId, String studentCode);
 
-    Optional<Student> findByIdentificationNumber(String identificationNumber);
+    Optional<Student> findByTeacherIdAndIdentificationNumber(Long teacherId, String identificationNumber);
 
-    /** Estudiantes visibles para el profesor (matriculados en grupos donde enseña), con filtros opcionales. */
+    /** Estudiantes del profesor, con filtros opcionales (grupo y texto). */
     PageResult<Student> searchByTeacher(Long teacherId, Long groupId, String search, PageQuery page);
 
     /** Estudiantes con matrícula activa en el grupo, ordenados por apellido y nombre. */

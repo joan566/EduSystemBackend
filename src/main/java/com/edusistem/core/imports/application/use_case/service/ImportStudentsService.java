@@ -17,7 +17,6 @@ import com.edusistem.core.imports.domain.vo.ParsedSheet;
 import com.edusistem.core.imports.domain.vo.SpreadsheetRow;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
-import com.edusistem.core.shared.domain.outputports.OwnershipPort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.TabularData;
 import com.edusistem.core.student.domain.entity.Student;
@@ -57,7 +56,6 @@ public class ImportStudentsService implements ImportStudentsUseCase {
     private final StudentRepositoryPort students;
     private final GradeRepositoryPort grades;
     private final GroupRepositoryPort groups;
-    private final OwnershipPort ownership;
     private final FileStoragePort storage;
     private final StudentImportApplier applier;
     private final RecordAuditUseCase audit;
@@ -65,7 +63,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
 
     public ImportStudentsService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
                                  ImportBatchRepositoryPort batches, StudentRepositoryPort students,
-                                 GradeRepositoryPort grades, GroupRepositoryPort groups, OwnershipPort ownership,
+                                 GradeRepositoryPort grades, GroupRepositoryPort groups,
                                  FileStoragePort storage, StudentImportApplier applier, RecordAuditUseCase audit,
                                  Clock clock) {
         this.reader = reader;
@@ -74,7 +72,6 @@ public class ImportStudentsService implements ImportStudentsUseCase {
         this.students = students;
         this.grades = grades;
         this.groups = groups;
-        this.ownership = ownership;
         this.storage = storage;
         this.applier = applier;
         this.audit = audit;
@@ -99,7 +96,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
             }
             List<ImportRowError> errors = new ArrayList<>();
             List<StudentImportRow> valid = validate(command.teacherId(), sheet.rows(), errors);
-            applier.apply(valid);
+            applier.apply(command.teacherId(), valid);
             return finish(batch, command.teacherId(), sheet.rows().size(), valid.size(), errors);
         } catch (RuntimeException e) {
             fail(batch, command.teacherId(), e);
@@ -128,7 +125,6 @@ public class ImportStudentsService implements ImportStudentsUseCase {
         Map<String, Integer> seenIdentifications = new HashMap<>();
         Map<String, Integer> seenCodes = new HashMap<>();
         Map<String, Optional<Long>> groupCache = new HashMap<>();
-        Map<Long, Boolean> teachesCache = new HashMap<>();
         int currentYear = LocalDateTime.now(clock).getYear();
 
         for (SpreadsheetRow row : rows) {
@@ -174,7 +170,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
             }
             Long groupId = null;
             if (gradeName != null && groupName != null && errors.size() == before) {
-                groupId = resolveGroup(row, gradeName, groupName, year, groupCache, teachesCache, teacherId, errors);
+                groupId = resolveGroup(row, gradeName, groupName, year, groupCache, teacherId, errors);
             }
             if (errors.size() > before) {
                 continue;
@@ -186,33 +182,26 @@ public class ImportStudentsService implements ImportStudentsUseCase {
     }
 
     private Long resolveGroup(SpreadsheetRow row, String gradeName, String groupName, int year,
-                              Map<String, Optional<Long>> cache, Map<Long, Boolean> teachesCache, Long teacherId,
-                              List<ImportRowError> errors) {
+                              Map<String, Optional<Long>> cache, Long teacherId, List<ImportRowError> errors) {
         String key = gradeName + "|" + groupName + "|" + year;
         Optional<Long> groupId = cache.computeIfAbsent(key,
-                k -> groups.findByGradeNameAndNameAndAcademicYear(gradeName, groupName, year).map(Group::getId));
+                k -> groups.findByGradeNameAndNameAndAcademicYear(teacherId, gradeName, groupName, year).map(Group::getId));
         if (groupId.isEmpty()) {
-            boolean gradeExists = grades.findByName(gradeName).isPresent();
+            boolean gradeExists = grades.findByTeacherIdAndName(teacherId, gradeName).isPresent();
             errors.add(new ImportRowError(row.rowNumber(), gradeExists ? "group" : "grade", gradeExists
                     ? "Group '" + groupName + "' does not exist in grade '" + gradeName + "' for " + year
                     : "Grade '" + gradeName + "' does not exist"));
             return null;
         }
-        boolean teaches = teachesCache.computeIfAbsent(groupId.get(), id -> ownership.teachesGroup(teacherId, id));
-        if (!teaches) {
-            errors.add(new ImportRowError(row.rowNumber(), "group",
-                    "You have no teaching assignment for group " + gradeName + " " + groupName + " (" + year + ")"));
-            return null;
-        }
         return groupId.get();
     }
 
-    /** Decide crear o reutilizar al estudiante; solo actualiza sus datos si el profesor ya puede verlo. */
+    /** Decide crear o reutilizar (y actualizar) a un estudiante del propio profesor. */
     private Optional<StudentImportRow> resolveStudent(SpreadsheetRow row, Long teacherId, String identification,
                                                       String code, String firstName, String lastName, String email,
                                                       Long groupId, List<ImportRowError> errors) {
-        Optional<Student> byIdentification = students.findByIdentificationNumber(identification);
-        Optional<Student> byCode = code == null ? Optional.empty() : students.findByStudentCode(code);
+        Optional<Student> byIdentification = students.findByTeacherIdAndIdentificationNumber(teacherId, identification);
+        Optional<Student> byCode = code == null ? Optional.empty() : students.findByTeacherIdAndStudentCode(teacherId, code);
         if (byIdentification.isPresent() && byCode.isPresent() && !byIdentification.get().getId().equals(byCode.get().getId())) {
             errors.add(new ImportRowError(row.rowNumber(), "student_code",
                     "The student code belongs to a different student than the identification number"));
@@ -223,8 +212,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
             return Optional.empty();
         }
         Long existingId = byIdentification.map(Student::getId).orElse(null);
-        boolean update = existingId != null && ownership.teachesStudent(teacherId, existingId);
-        return Optional.of(new StudentImportRow(row.rowNumber(), existingId, update, identification, code, firstName,
+        return Optional.of(new StudentImportRow(row.rowNumber(), existingId, identification, code, firstName,
                 lastName, email, groupId));
     }
 

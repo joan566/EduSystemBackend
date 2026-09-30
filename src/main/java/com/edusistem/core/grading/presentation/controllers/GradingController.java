@@ -51,15 +51,15 @@ public class GradingController {
     }
 
     @GetMapping("/grading-scales")
-    @Operation(summary = "Lista las escalas de calificación")
-    public List<ScaleResponse> listScales() {
-        return scales.list().stream().map(ScaleResponse::from).toList();
+    @Operation(summary = "Lista las escalas del sistema y las propias del profesor")
+    public List<ScaleResponse> listScales(@AuthenticationPrincipal AuthenticatedUser user) {
+        return scales.list(user.id()).stream().map(ScaleResponse::from).toList();
     }
 
     @GetMapping("/grading-scales/{id}")
     @Operation(summary = "Consulta una escala de calificación")
-    public ScaleResponse getScale(@PathVariable Long id) {
-        return ScaleResponse.from(scales.get(id));
+    public ScaleResponse getScale(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ScaleResponse.from(scales.get(user.id(), id));
     }
 
     @PutMapping("/teaching-periods/{teachingPeriodId}/grading-configuration")

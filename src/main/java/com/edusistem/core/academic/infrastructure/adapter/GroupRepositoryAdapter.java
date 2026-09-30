@@ -49,13 +49,15 @@ public class GroupRepositoryAdapter implements GroupRepositoryPort {
     }
 
     @Override
-    public Optional<Group> findByGradeNameAndNameAndAcademicYear(String gradeName, String name, int academicYear) {
-        return repository.findByGradeNameAndName(gradeName, name, academicYear).map(mapper::toDomain);
+    public Optional<Group> findByGradeNameAndNameAndAcademicYear(Long teacherId, String gradeName, String name,
+                                                                 int academicYear) {
+        return repository.findByGradeNameAndName(teacherId, gradeName, name, academicYear).map(mapper::toDomain);
     }
 
     @Override
-    public PageResult<GroupView> search(Long gradeId, Integer academicYear, PageQuery page) {
-        return PageMapper.toResult(repository.searchViews(gradeId, academicYear, PageMapper.pageable(page)), v -> v);
+    public PageResult<GroupView> search(Long teacherId, Long gradeId, Integer academicYear, PageQuery page) {
+        return PageMapper.toResult(repository.searchViews(teacherId, gradeId, academicYear, PageMapper.pageable(page)),
+                v -> v);
     }
 
     @Override

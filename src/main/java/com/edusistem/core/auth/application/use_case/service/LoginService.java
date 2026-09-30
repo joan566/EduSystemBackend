@@ -22,6 +22,8 @@ public class LoginService implements LoginUseCase {
     private final SessionService sessions;
     private final LoginAttemptPort attempts;
     private final RecordAuditUseCase audit;
+    /** Hash de relleno: se compara aunque el correo no exista para que el tiempo de respuesta no revele cuentas. */
+    private final String dummyHash;
 
     public LoginService(UserRepositoryPort users, PasswordHasherPort hasher, SessionService sessions,
                         LoginAttemptPort attempts, RecordAuditUseCase audit) {
@@ -30,6 +32,7 @@ public class LoginService implements LoginUseCase {
         this.sessions = sessions;
         this.attempts = attempts;
         this.audit = audit;
+        this.dummyHash = hasher.hash("dummy-password-for-constant-time-login");
     }
 
     @Override
@@ -43,8 +46,9 @@ public class LoginService implements LoginUseCase {
                     "Too many failed login attempts; try again later", retryAfter);
         }
         Optional<User> found = users.findByEmail(email);
-        if (found.isEmpty() || !found.get().isActive()
-                || !hasher.matches(command.password(), found.get().getPasswordHash())) {
+        boolean passwordMatches = hasher.matches(command.password(),
+                found.map(User::getPasswordHash).orElse(dummyHash));
+        if (found.isEmpty() || !found.get().isActive() || !passwordMatches) {
             attempts.recordFailure(email, command.clientIp());
             audit.failure(found.map(User::getId).orElse(null), AuditAction.LOGIN, "User",
                     found.map(User::getId).orElse(null), "invalid credentials for " + email);

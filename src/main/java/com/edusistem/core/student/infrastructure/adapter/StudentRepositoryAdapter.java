@@ -34,13 +34,13 @@ public class StudentRepositoryAdapter implements StudentRepositoryPort {
     }
 
     @Override
-    public Optional<Student> findByStudentCode(String studentCode) {
-        return repository.findByStudentCode(studentCode).map(mapper::toDomain);
+    public Optional<Student> findByTeacherIdAndStudentCode(Long teacherId, String studentCode) {
+        return repository.findByTeacherIdAndStudentCode(teacherId, studentCode).map(mapper::toDomain);
     }
 
     @Override
-    public Optional<Student> findByIdentificationNumber(String identificationNumber) {
-        return repository.findByIdentificationNumber(identificationNumber).map(mapper::toDomain);
+    public Optional<Student> findByTeacherIdAndIdentificationNumber(Long teacherId, String identificationNumber) {
+        return repository.findByTeacherIdAndIdentificationNumber(teacherId, identificationNumber).map(mapper::toDomain);
     }
 
     @Override

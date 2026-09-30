@@ -1,8 +1,8 @@
 package com.edusistem.core.shared.domain.outputports;
 
 /**
- * Consultas de pertenencia. La propiedad de los datos académicos se deriva siempre de
- * teaching_assignments.teacher_id; nunca de un identificador enviado por el cliente.
+ * Consultas de pertenencia. Cada dato pertenece a un único profesor (columna teacher_id propia o heredada de
+ * teaching_assignments); el profesor sale siempre del token, nunca de un identificador enviado por el cliente.
  */
 public interface OwnershipPort {
 
@@ -18,9 +18,7 @@ public interface OwnershipPort {
 
     boolean ownsAttendanceSession(Long teacherId, Long attendanceSessionId);
 
-    /** El profesor tiene alguna asignación docente sobre el grupo. */
-    boolean teachesGroup(Long teacherId, Long groupId);
+    boolean ownsGroup(Long teacherId, Long groupId);
 
-    /** El estudiante pertenece (o perteneció) a algún grupo en el que el profesor enseña. */
-    boolean teachesStudent(Long teacherId, Long studentId);
+    boolean ownsStudent(Long teacherId, Long studentId);
 }

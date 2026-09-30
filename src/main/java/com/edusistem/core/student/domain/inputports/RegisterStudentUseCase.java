@@ -10,6 +10,6 @@ public interface RegisterStudentUseCase {
 
     Student update(StudentCommands.Update command);
 
-    /** Matricula al estudiante en el grupo; reactiva la matrícula si estaba retirado. */
+    /** Matricula al estudiante en un grupo del mismo profesor; reactiva la matrícula si estaba retirado. */
     void enroll(StudentCommands.Enroll command);
 }

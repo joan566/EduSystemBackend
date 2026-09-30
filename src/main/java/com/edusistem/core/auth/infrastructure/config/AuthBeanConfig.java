@@ -2,19 +2,24 @@ package com.edusistem.core.auth.infrastructure.config;
 
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.auth.application.use_case.service.ChangePasswordService;
+import com.edusistem.core.auth.application.use_case.service.DeleteAccountService;
 import com.edusistem.core.auth.application.use_case.service.LoginService;
 import com.edusistem.core.auth.application.use_case.service.PasswordRecoveryService;
 import com.edusistem.core.auth.application.use_case.service.RefreshSessionService;
 import com.edusistem.core.auth.application.use_case.service.RegisterUserService;
 import com.edusistem.core.auth.application.use_case.service.SessionService;
+import com.edusistem.core.auth.domain.outputports.AccountErasurePort;
 import com.edusistem.core.auth.domain.outputports.LoginAttemptPort;
 import com.edusistem.core.auth.domain.outputports.MailSenderPort;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.outputports.PasswordResetTokenRepositoryPort;
 import com.edusistem.core.auth.domain.outputports.RefreshTokenRepositoryPort;
+import com.edusistem.core.auth.domain.outputports.RequestRateLimitPort;
 import com.edusistem.core.auth.domain.outputports.TokenIssuerPort;
 import com.edusistem.core.auth.infrastructure.security.JwtProperties;
+import com.edusistem.core.auth.infrastructure.security.RateLimitProperties;
 import com.edusistem.core.authorization.domain.outputports.RoleRepositoryPort;
+import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +43,12 @@ public class AuthBeanConfig {
     }
 
     @Bean
+    DeleteAccountService deleteAccountService(UserRepositoryPort users, PasswordHasherPort hasher,
+                                              AccountErasurePort erasure, FileStoragePort storage) {
+        return new DeleteAccountService(users, hasher, erasure, storage);
+    }
+
+    @Bean
     LoginService loginService(UserRepositoryPort users, PasswordHasherPort hasher, SessionService sessions,
                               LoginAttemptPort attempts, RecordAuditUseCase audit) {
         return new LoginService(users, hasher, sessions, attempts, audit);
@@ -47,11 +58,16 @@ public class AuthBeanConfig {
     PasswordRecoveryService passwordRecoveryService(UserRepositoryPort users,
                                                     PasswordResetTokenRepositoryPort tokens,
                                                     PasswordHasherPort hasher, MailSenderPort mailSender,
-                                                    SessionService sessions, RecordAuditUseCase audit, Clock clock,
+                                                    SessionService sessions, RecordAuditUseCase audit,
+                                                    RequestRateLimitPort rateLimiter, RateLimitProperties rateLimits,
+                                                    Clock clock,
                                                     @Value("${edusistem.password-reset.code-ttl-minutes}") int ttlMinutes,
                                                     @Value("${edusistem.password-reset.max-attempts}") int maxAttempts) {
-        return new PasswordRecoveryService(users, tokens, hasher, mailSender, sessions, audit, clock, ttlMinutes,
-                                           maxAttempts);
+        var limits = new PasswordRecoveryService.Limits(rateLimits.forgotPasswordPerEmail().toRateLimit(),
+                rateLimits.forgotPasswordPerIp().toRateLimit(), rateLimits.resetCodePerEmail().toRateLimit(),
+                rateLimits.resetCodePerIp().toRateLimit());
+        return new PasswordRecoveryService(users, tokens, hasher, mailSender, sessions, audit, rateLimiter, limits,
+                                           clock, ttlMinutes, maxAttempts);
     }
 
     @Bean
@@ -63,7 +79,9 @@ public class AuthBeanConfig {
     @Bean
     RegisterUserService registerUserService(UserRepositoryPort users, RoleRepositoryPort roles,
                                             PasswordHasherPort hasher, SessionService sessions,
-                                            RecordAuditUseCase audit) {
-        return new RegisterUserService(users, roles, hasher, sessions, audit);
+                                            RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
+                                            RateLimitProperties rateLimits) {
+        return new RegisterUserService(users, roles, hasher, sessions, audit, rateLimiter,
+                                       rateLimits.registerPerIp().toRateLimit());
     }
 }

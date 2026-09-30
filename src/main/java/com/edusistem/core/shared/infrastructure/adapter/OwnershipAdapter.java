@@ -66,18 +66,13 @@ public class OwnershipAdapter implements OwnershipPort {
     }
 
     @Override
-    public boolean teachesGroup(Long teacherId, Long groupId) {
-        return exists("""
-                select 1 from teaching_assignments ta
-                where ta.group_id = :id and ta.teacher_id = :teacher""", teacherId, groupId);
+    public boolean ownsGroup(Long teacherId, Long groupId) {
+        return exists("select 1 from groups g where g.id = :id and g.teacher_id = :teacher", teacherId, groupId);
     }
 
     @Override
-    public boolean teachesStudent(Long teacherId, Long studentId) {
-        return exists("""
-                select 1 from student_groups sg
-                join teaching_assignments ta on ta.group_id = sg.group_id
-                where sg.student_id = :id and ta.teacher_id = :teacher""", teacherId, studentId);
+    public boolean ownsStudent(Long teacherId, Long studentId) {
+        return exists("select 1 from students s where s.id = :id and s.teacher_id = :teacher", teacherId, studentId);
     }
 
     private boolean exists(String sql, Long teacherId, Long id) {

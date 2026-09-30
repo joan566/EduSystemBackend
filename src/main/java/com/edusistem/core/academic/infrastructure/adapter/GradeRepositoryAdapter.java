@@ -36,13 +36,13 @@ public class GradeRepositoryAdapter implements GradeRepositoryPort {
     }
 
     @Override
-    public Optional<Grade> findByName(String name) {
-        return repository.findByName(name).map(mapper::toDomain);
+    public Optional<Grade> findByTeacherIdAndName(Long teacherId, String name) {
+        return repository.findByTeacherIdAndName(teacherId, name).map(mapper::toDomain);
     }
 
     @Override
-    public List<Grade> findAllOrderedByName() {
-        return repository.findAllByOrderByNameAsc().stream().map(mapper::toDomain).toList();
+    public List<Grade> findByTeacherIdOrderedByName(Long teacherId) {
+        return repository.findByTeacherIdOrderByNameAsc(teacherId).stream().map(mapper::toDomain).toList();
     }
 
     @Override

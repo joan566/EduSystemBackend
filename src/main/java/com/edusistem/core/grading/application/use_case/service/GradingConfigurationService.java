@@ -44,7 +44,7 @@ public class GradingConfigurationService implements ConfigureGradingUseCase {
     @UseCaseTransactional
     public GradingConfigurationView save(GradingCommands.SaveConfiguration command) {
         guard.requireTeachingPeriod(command.teacherId(), command.teachingPeriodId());
-        GradingScale scale = scales.findById(command.gradingScaleId())
+        GradingScale scale = scales.findById(command.gradingScaleId()).filter(s -> s.isVisibleTo(command.teacherId()))
                 .orElseThrow(() -> ResourceNotFoundException.of("GradingScale", command.gradingScaleId()));
         List<GradingWeight> weights = new ArrayList<>();
         for (GradingCommands.WeightInput input : command.weights()) {

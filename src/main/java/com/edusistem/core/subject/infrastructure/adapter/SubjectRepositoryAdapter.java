@@ -40,14 +40,14 @@ public class SubjectRepositoryAdapter implements SubjectRepositoryPort {
     }
 
     @Override
-    public Optional<Subject> findByName(String name) {
-        return repository.findByName(name).map(mapper::toDomain);
+    public Optional<Subject> findByTeacherIdAndName(Long teacherId, String name) {
+        return repository.findByTeacherIdAndName(teacherId, name).map(mapper::toDomain);
     }
 
     @Override
-    public PageResult<Subject> search(String nameQuery, PageQuery page) {
+    public PageResult<Subject> search(Long teacherId, String nameQuery, PageQuery page) {
         String pattern = "%" + (nameQuery == null ? "" : nameQuery.trim().toLowerCase(Locale.ROOT)) + "%";
-        return PageMapper.toResult(repository.search(pattern, PageMapper.pageable(page, Sort.by("name"))), mapper::toDomain);
+        return PageMapper.toResult(repository.search(teacherId, pattern, PageMapper.pageable(page, Sort.by("name"))), mapper::toDomain);
     }
 
     @Override

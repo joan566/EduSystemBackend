@@ -6,6 +6,8 @@ import com.edusistem.core.auth.application.use_case.dtos.AuthCommands;
 import com.edusistem.core.auth.application.use_case.dtos.AuthResult;
 import com.edusistem.core.auth.domain.inputports.RegisterUserUseCase;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
+import com.edusistem.core.auth.domain.outputports.RequestRateLimitPort;
+import com.edusistem.core.auth.domain.vo.RateLimit;
 import com.edusistem.core.auth.domain.vo.PasswordPolicy;
 import com.edusistem.core.authorization.domain.entity.Role;
 import com.edusistem.core.authorization.domain.enums.RoleName;
@@ -13,6 +15,7 @@ import com.edusistem.core.authorization.domain.outputports.RoleRepositoryPort;
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
+import com.edusistem.core.shared.domain.exceptions.TooManyRequestsException;
 import com.edusistem.core.user.domain.entity.User;
 import com.edusistem.core.user.domain.outputports.UserRepositoryPort;
 import java.util.EnumSet;
@@ -25,19 +28,30 @@ public class RegisterUserService implements RegisterUserUseCase {
     private final PasswordHasherPort hasher;
     private final SessionService sessions;
     private final RecordAuditUseCase audit;
+    private final RequestRateLimitPort rateLimiter;
+    private final RateLimit perIpLimit;
 
     public RegisterUserService(UserRepositoryPort users, RoleRepositoryPort roles, PasswordHasherPort hasher,
-                               SessionService sessions, RecordAuditUseCase audit) {
+                               SessionService sessions, RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
+                               RateLimit perIpLimit) {
         this.users = users;
         this.roles = roles;
         this.hasher = hasher;
         this.sessions = sessions;
         this.audit = audit;
+        this.rateLimiter = rateLimiter;
+        this.perIpLimit = perIpLimit;
     }
 
     @Override
     @UseCaseTransactional
     public AuthResult register(AuthCommands.Register command) {
+        // Limita el alta masiva de cuentas y el sondeo de correos registrados (EMAIL_ALREADY_REGISTERED).
+        long retryAfter = rateLimiter.tryConsume("register:ip:" + command.clientIp(), perIpLimit);
+        if (retryAfter > 0) {
+            throw new TooManyRequestsException("TOO_MANY_REGISTRATIONS",
+                    "Too many sign-up attempts; try again later", retryAfter);
+        }
         String email = command.email().trim().toLowerCase(Locale.ROOT);
         PasswordPolicy.validate(command.password());
         if (users.existsByEmail(email)) {

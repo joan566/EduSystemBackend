@@ -33,12 +33,14 @@ public class TeachingAssignmentService implements ManageTeachingAssignmentUseCas
         this.audit = audit;
     }
 
-    /** El profesor siempre es el usuario autenticado; solo puede asignarse a sí mismo. */
+    /** El profesor siempre es el usuario autenticado, y el grupo y la asignatura deben ser suyos. */
     @Override
     @UseCaseTransactional
     public TeachingAssignmentView create(AcademicCommands.CreateTeachingAssignment command) {
-        groups.findById(command.groupId()).orElseThrow(() -> ResourceNotFoundException.of("Group", command.groupId()));
-        subjects.findById(command.subjectId()).orElseThrow(() -> ResourceNotFoundException.of("Subject", command.subjectId()));
+        groups.findById(command.groupId()).filter(g -> g.getTeacherId().equals(command.teacherId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Group", command.groupId()));
+        subjects.findById(command.subjectId()).filter(s -> s.getTeacherId().equals(command.teacherId()))
+                .orElseThrow(() -> ResourceNotFoundException.of("Subject", command.subjectId()));
         TeachingAssignment assignment = assignments.findByTeacherIdAndGroupIdAndSubjectId(
                 command.teacherId(), command.groupId(), command.subjectId()).orElse(null);
         if (assignment != null && assignment.isActive()) {

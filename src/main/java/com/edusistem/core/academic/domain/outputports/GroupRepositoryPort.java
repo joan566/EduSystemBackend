@@ -17,9 +17,9 @@ public interface GroupRepositoryPort {
     Optional<Group> findByGradeIdAndNameAndAcademicYear(Long gradeId, String name, int academicYear);
 
     /** Búsqueda por nombre de grado y de grupo (usado por la importación de estudiantes). */
-    Optional<Group> findByGradeNameAndNameAndAcademicYear(String gradeName, String name, int academicYear);
+    Optional<Group> findByGradeNameAndNameAndAcademicYear(Long teacherId, String gradeName, String name, int academicYear);
 
-    PageResult<GroupView> search(Long gradeId, Integer academicYear, PageQuery page);
+    PageResult<GroupView> search(Long teacherId, Long gradeId, Integer academicYear, PageQuery page);
 
     boolean hasDependents(Long groupId);
 

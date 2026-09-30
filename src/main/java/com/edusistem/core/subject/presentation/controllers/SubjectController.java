@@ -42,17 +42,18 @@ public class SubjectController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista paginada de asignaturas (filtro opcional por nombre)")
-    public PageResponse<Response> list(@RequestParam(required = false) String name,
+    @Operation(summary = "Lista paginada de las asignaturas del profesor (filtro opcional por nombre)")
+    public PageResponse<Response> list(@AuthenticationPrincipal AuthenticatedUser user,
+                                       @RequestParam(required = false) String name,
                                        @RequestParam(required = false) Integer page,
                                        @RequestParam(required = false) Integer size) {
-        return PageResponse.from(subjects.search(name, PageQuery.of(page, size)), Response::from);
+        return PageResponse.from(subjects.search(user.id(), name, PageQuery.of(page, size)), Response::from);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Consulta una asignatura")
-    public Response get(@PathVariable Long id) {
-        return Response.from(subjects.get(id));
+    public Response get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return Response.from(subjects.get(user.id(), id));
     }
 
     @PutMapping("/{id}")

@@ -11,25 +11,23 @@ import org.springframework.data.repository.query.Param;
 
 public interface SpringDataStudentRepository extends JpaRepository<StudentEntity, Long> {
 
-    Optional<StudentEntity> findByStudentCode(String studentCode);
+    Optional<StudentEntity> findByTeacherIdAndStudentCode(Long teacherId, String studentCode);
 
-    Optional<StudentEntity> findByIdentificationNumber(String identificationNumber);
+    Optional<StudentEntity> findByTeacherIdAndIdentificationNumber(Long teacherId, String identificationNumber);
 
     @Query(value = """
             select s from StudentEntity s
-            where exists (
-                select 1 from StudentGroupEntity sg join TeachingAssignmentEntity ta on ta.groupId = sg.groupId
-                where sg.studentId = s.id and ta.teacherId = :teacherId
-                  and (:groupId is null or sg.groupId = :groupId))
+            where s.teacherId = :teacherId
+              and (:groupId is null or exists (
+                select 1 from StudentGroupEntity sg where sg.studentId = s.id and sg.groupId = :groupId))
               and (lower(s.firstName) like :pattern or lower(s.lastName) like :pattern
                    or lower(s.studentCode) like :pattern or lower(coalesce(s.identificationNumber, '')) like :pattern)
             order by s.lastName, s.firstName, s.id""",
             countQuery = """
                     select count(s) from StudentEntity s
-                    where exists (
-                        select 1 from StudentGroupEntity sg join TeachingAssignmentEntity ta on ta.groupId = sg.groupId
-                        where sg.studentId = s.id and ta.teacherId = :teacherId
-                          and (:groupId is null or sg.groupId = :groupId))
+                    where s.teacherId = :teacherId
+                      and (:groupId is null or exists (
+                        select 1 from StudentGroupEntity sg where sg.studentId = s.id and sg.groupId = :groupId))
                       and (lower(s.firstName) like :pattern or lower(s.lastName) like :pattern
                            or lower(s.studentCode) like :pattern or lower(coalesce(s.identificationNumber, '')) like :pattern)""")
     Page<StudentEntity> searchByTeacher(@Param("teacherId") Long teacherId, @Param("groupId") Long groupId,

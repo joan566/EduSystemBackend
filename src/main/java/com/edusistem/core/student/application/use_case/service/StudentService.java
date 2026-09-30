@@ -54,14 +54,16 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     public Student create(StudentCommands.Create command) {
         String identification = blankToNull(command.identificationNumber());
         String code = blankToNull(command.studentCode());
-        if (identification != null && students.findByIdentificationNumber(identification).isPresent()) {
+        if (identification != null
+                && students.findByTeacherIdAndIdentificationNumber(command.teacherId(), identification).isPresent()) {
             throw new ConflictException("IDENTIFICATION_ALREADY_EXISTS",
                     "A student with identification number " + identification + " already exists");
         }
-        if (code != null && students.findByStudentCode(code).isPresent()) {
+        if (code != null && students.findByTeacherIdAndStudentCode(command.teacherId(), code).isPresent()) {
             throw new ConflictException("STUDENT_CODE_ALREADY_EXISTS", "Student code " + code + " already exists");
         }
         return students.save(Student.builder()
+                .teacherId(command.teacherId())
                 .identificationNumber(identification)
                 .studentCode(code != null ? code : codeGenerator.nextStudentCode())
                 .firstName(command.firstName().trim())
@@ -73,6 +75,7 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     @Override
     @UseCaseTransactional
     public Student update(StudentCommands.Update command) {
+        guard.requireStudent(command.teacherId(), command.studentId());
         Student student = students.findById(command.studentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Student", command.studentId()));
         student.setFirstName(command.firstName().trim());
@@ -84,11 +87,13 @@ public class StudentService implements RegisterStudentUseCase, QueryStudentUseCa
     @Override
     @UseCaseTransactional
     public void enroll(StudentCommands.Enroll command) {
+        guard.requireStudent(command.teacherId(), command.studentId());
+        guard.requireGroup(command.teacherId(), command.groupId());
         LocalDateTime now = LocalDateTime.now(clock);
         StudentGroup enrollment = studentGroups.find(command.studentId(), command.groupId()).orElse(null);
         if (enrollment == null) {
             studentGroups.save(StudentGroup.builder().studentId(command.studentId()).groupId(command.groupId())
-                    .enrolledAt(now).active(true).build());
+                    .teacherId(command.teacherId()).enrolledAt(now).active(true).build());
         } else if (!enrollment.isActive()) {
             enrollment.reenroll(now);
             studentGroups.save(enrollment);

@@ -17,8 +17,8 @@ public final class AuthRequests {
             @NotBlank @Email @Size(max = 255) String email,
             @NotBlank @Size(min = 8, max = 72) String password) {
 
-        public AuthCommands.Register toCommand() {
-            return new AuthCommands.Register(firstName, lastName, email, password);
+        public AuthCommands.Register toCommand(String clientIp) {
+            return new AuthCommands.Register(firstName, lastName, email, password, clientIp);
         }
     }
 
@@ -35,6 +35,9 @@ public final class AuthRequests {
     }
 
     public record RefreshRequest(@NotBlank String refreshToken) {
+    }
+
+    public record DeleteAccountRequest(@NotBlank String password) {
     }
 
     public record ForgotPasswordRequest(@NotBlank @Email String email) {

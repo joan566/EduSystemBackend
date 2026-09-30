@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MvcResult;
 
 class AuthIntegrationTest extends IntegrationTest {
 
@@ -181,11 +182,65 @@ class AuthIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    void swaggerAndOpenApiAreExposedAndDescribeBearerAuth() throws Exception {
-        String docs = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/v3/api-docs"))
-                .andReturn().getResponse().getContentAsString();
-        assertThat(docs).contains("bearerAuth").contains("/api/v1/auth/login").contains("/api/v1/exams/{examId}/submissions");
-        assertThat(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/swagger-ui/index.html"))
-                .andReturn().getResponse().getStatus()).isEqualTo(200);
+    void apiDocsAreDisabledByDefault() {
+        assertThat(perform("GET", null, "/v3/api-docs", null).getResponse().getStatus()).isEqualTo(404);
+        assertThat(perform("GET", null, "/swagger-ui/index.html", null).getResponse().getStatus()).isEqualTo(404);
+    }
+
+    @Test
+    void forgotPasswordIsRateLimitedPerEmailWhetherOrNotTheAccountExists() {
+        Teacher t = newTeacher();
+        String ghost = "ghost" + unique("") + "@example.com";
+        for (String email : List.of(t.email(), ghost)) {
+            for (int i = 0; i < 3; i++) {
+                call("POST", null, "/api/v1/auth/forgot-password", Map.of("email", email), 202);
+            }
+            MvcResult blocked = perform("POST", null, "/api/v1/auth/forgot-password", Map.of("email", email));
+            assertError(parse(blocked, 429), 429, "TOO_MANY_PASSWORD_RESET_REQUESTS");
+            assertThat(Long.parseLong(blocked.getResponse().getHeader("Retry-After"))).isPositive();
+        }
+    }
+
+    @Test
+    void resetCodeVerificationsAreLimitedPerEmailSoCodesCannotBeBruteForcedByRequestingNewOnes() {
+        reset(mailSender);
+        Teacher t = newTeacher();
+        call("POST", null, "/api/v1/auth/forgot-password", Map.of("email", t.email()), 202);
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(mailSender).sendPasswordResetCode(eq(t.email()), code.capture(), anyInt());
+        String wrong = code.getValue().equals("000000") ? "111111" : "000000";
+        for (int i = 0; i < 10; i++) {
+            call("POST", null, "/api/v1/auth/verify-code", Map.of("email", t.email(), "code", wrong), 400);
+        }
+        assertError(call("POST", null, "/api/v1/auth/verify-code", Map.of("email", t.email(), "code", wrong), 429),
+                429, "TOO_MANY_PASSWORD_RESET_REQUESTS");
+        assertError(call("POST", null, "/api/v1/auth/reset-password", Map.of("email", t.email(), "code", wrong,
+                "newPassword", "Another456"), 429), 429, "TOO_MANY_PASSWORD_RESET_REQUESTS");
+    }
+
+    @Test
+    void registrationIsRateLimitedPerIp() {
+        String ip = nextIp();
+        for (int i = 0; i < 10; i++) {
+            parse(callFrom(ip, "POST", "/api/v1/auth/register", registration(unique("r") + "@example.com")), 201);
+        }
+        assertError(parse(callFrom(ip, "POST", "/api/v1/auth/register", registration(unique("r") + "@example.com")), 429),
+                429, "TOO_MANY_REGISTRATIONS");
+        // otra IP no está afectada
+        call("POST", null, "/api/v1/auth/register", registration(unique("r") + "@example.com"), 201);
+    }
+
+    @Test
+    void deletingTheAccountRequiresThePasswordAndRevokesAccess() {
+        Teacher t = newTeacher();
+        assertError(call("DELETE", t, "/api/v1/auth/account", Map.of("password", "Wrong1234"), 400), 400,
+                "INVALID_CURRENT_PASSWORD");
+        get(t, "/api/v1/auth/me", 200);
+        call("DELETE", t, "/api/v1/auth/account", Map.of("password", PASSWORD), 204);
+        assertError(get(t, "/api/v1/auth/me", 401), 401, "UNAUTHORIZED");
+        assertError(call("POST", null, "/api/v1/auth/login", Map.of("email", t.email(), "password", PASSWORD), 401),
+                401, "INVALID_CREDENTIALS");
+        // el correo queda libre para registrarse de nuevo
+        call("POST", null, "/api/v1/auth/register", registration(t.email()), 201);
     }
 }

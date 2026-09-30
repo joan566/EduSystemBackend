@@ -43,7 +43,6 @@ import com.edusistem.core.imports.domain.vo.SpreadsheetRow;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
-import com.edusistem.core.shared.domain.outputports.OwnershipPort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
@@ -106,7 +105,6 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
     private final TeachingPeriodRepositoryPort teachingPeriods;
     private final ManageTeachingPeriodUseCase manageTeachingPeriod;
     private final StudentRepositoryPort students;
-    private final OwnershipPort ownership;
     private final StudentImportApplier applier;
     private final ActivityRepositoryPort activityRepo;
     private final ManageActivityUseCase manageActivity;
@@ -124,7 +122,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                                     ManageTeachingAssignmentUseCase manageTeachingAssignment,
                                     TeachingPeriodRepositoryPort teachingPeriods,
                                     ManageTeachingPeriodUseCase manageTeachingPeriod, StudentRepositoryPort students,
-                                    OwnershipPort ownership, StudentImportApplier applier, ActivityRepositoryPort activityRepo,
+                                    StudentImportApplier applier, ActivityRepositoryPort activityRepo,
                                     ManageActivityUseCase manageActivity, GradeActivityUseCase gradeActivity,
                                     AttendanceSessionRepositoryPort sessions, ManageAttendanceUseCase attendance) {
         this.reader = reader;
@@ -146,7 +144,6 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         this.teachingPeriods = teachingPeriods;
         this.manageTeachingPeriod = manageTeachingPeriod;
         this.students = students;
-        this.ownership = ownership;
         this.applier = applier;
         this.activityRepo = activityRepo;
         this.manageActivity = manageActivity;
@@ -259,7 +256,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 continue;
             }
             try {
-                if (academicPeriods.findByName(name).isEmpty()) {
+                if (academicPeriods.findByTeacherIdAndName(teacherId, name).isEmpty()) {
                     manageAcademicPeriod.create(new AcademicCommands.SavePeriod(teacherId, null, name, startDate, endDate));
                 }
             } catch (RuntimeException e) {
@@ -289,7 +286,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 continue;
             }
             try {
-                if (grades.findByName(name).isEmpty()) {
+                if (grades.findByTeacherIdAndName(teacherId, name).isEmpty()) {
                     manageGrade.create(new AcademicCommands.CreateGrade(teacherId, name, description));
                 }
             } catch (RuntimeException e) {
@@ -319,7 +316,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 continue;
             }
             try {
-                if (subjects.findByName(name).isEmpty()) {
+                if (subjects.findByTeacherIdAndName(teacherId, name).isEmpty()) {
                     manageSubject.create(new SubjectCommands.Create(teacherId, name, description));
                 }
             } catch (RuntimeException e) {
@@ -352,8 +349,8 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 continue;
             }
             try {
-                if (groups.findByGradeNameAndNameAndAcademicYear(gradeName, name, year).isEmpty()) {
-                    Long gradeId = grades.findByName(gradeName).map(Grade::getId).orElse(null);
+                if (groups.findByGradeNameAndNameAndAcademicYear(teacherId, gradeName, name, year).isEmpty()) {
+                    Long gradeId = grades.findByTeacherIdAndName(teacherId, gradeName).map(Grade::getId).orElse(null);
                     if (gradeId == null) {
                         errors.add(new ImportRowError(row.rowNumber(), "Groups:grade_name",
                                 "Grade '" + gradeName + "' does not exist (add it to the AcademicGrades sheet)"));
@@ -393,8 +390,8 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 continue;
             }
             try {
-                Optional<Group> group = groups.findByGradeNameAndNameAndAcademicYear(key.gradeName(), key.groupName(),
-                        key.academicYear());
+                Optional<Group> group = groups.findByGradeNameAndNameAndAcademicYear(teacherId, key.gradeName(),
+                        key.groupName(), key.academicYear());
                 if (group.isEmpty()) {
                     errors.add(new ImportRowError(row.rowNumber(), "Classes:group_name",
                             "Group '" + key.groupName() + "' does not exist in grade '" + key.gradeName() + "' for "
@@ -402,14 +399,14 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                     failedKeys.add("Classes#" + row.rowNumber());
                     continue;
                 }
-                Optional<Subject> subject = subjects.findByName(key.subjectName());
+                Optional<Subject> subject = subjects.findByTeacherIdAndName(teacherId, key.subjectName());
                 if (subject.isEmpty()) {
                     errors.add(new ImportRowError(row.rowNumber(), "Classes:subject_name",
                             "Subject '" + key.subjectName() + "' does not exist (add it to the Subjects sheet)"));
                     failedKeys.add("Classes#" + row.rowNumber());
                     continue;
                 }
-                Optional<AcademicPeriod> period = academicPeriods.findByName(key.academicPeriodName());
+                Optional<AcademicPeriod> period = academicPeriods.findByTeacherIdAndName(teacherId, key.academicPeriodName());
                 if (period.isEmpty()) {
                     errors.add(new ImportRowError(row.rowNumber(), "Classes:academic_period_name",
                             "Academic period '" + key.academicPeriodName()
@@ -454,7 +451,6 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         List<StudentImportRow> valid = new ArrayList<>();
         Map<String, Integer> seenIdentifications = new HashMap<>();
         Map<String, Optional<Long>> groupCache = new HashMap<>();
-        Map<Long, Boolean> teachesCache = new HashMap<>();
         int currentYear = LocalDateTime.now(clock).getYear();
 
         for (SpreadsheetRow row : sheet.rows()) {
@@ -490,37 +486,30 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
             }
             Long groupId = null;
             if (gradeName != null && groupName != null && errors.size() == before) {
-                groupId = resolveEnrollmentGroup(row, gradeName, groupName, year, groupCache, teachesCache, teacherId, errors);
+                groupId = resolveEnrollmentGroup(row, gradeName, groupName, year, groupCache, teacherId, errors);
             }
             if (errors.size() > before) {
                 failedKeys.add("Students#" + row.rowNumber());
                 continue;
             }
-            Long existingId = students.findByIdentificationNumber(identification).map(Student::getId).orElse(null);
-            boolean update = existingId != null && ownership.teachesStudent(teacherId, existingId);
-            valid.add(new StudentImportRow(row.rowNumber(), existingId, update, identification, null, firstName, lastName,
+            Long existingId = students.findByTeacherIdAndIdentificationNumber(teacherId, identification)
+                    .map(Student::getId).orElse(null);
+            valid.add(new StudentImportRow(row.rowNumber(), existingId, identification, null, firstName, lastName,
                     email, groupId));
         }
-        applier.apply(valid);
+        applier.apply(teacherId, valid);
         return sheet.rows().size();
     }
 
     private Long resolveEnrollmentGroup(SpreadsheetRow row, String gradeName, String groupName, int year,
-                                        Map<String, Optional<Long>> cache, Map<Long, Boolean> teachesCache, Long teacherId,
-                                        List<ImportRowError> errors) {
+                                        Map<String, Optional<Long>> cache, Long teacherId, List<ImportRowError> errors) {
         String key = gradeName + "|" + groupName + "|" + year;
         Optional<Long> groupId = cache.computeIfAbsent(key,
-                k -> groups.findByGradeNameAndNameAndAcademicYear(gradeName, groupName, year).map(Group::getId));
+                k -> groups.findByGradeNameAndNameAndAcademicYear(teacherId, gradeName, groupName, year).map(Group::getId));
         if (groupId.isEmpty()) {
             errors.add(new ImportRowError(row.rowNumber(), "Students:group_name",
                     "Group '" + groupName + "' does not exist in grade '" + gradeName + "' for " + year
                             + " (add it to the Groups sheet)"));
-            return null;
-        }
-        boolean teaches = teachesCache.computeIfAbsent(groupId.get(), id -> ownership.teachesGroup(teacherId, id));
-        if (!teaches) {
-            errors.add(new ImportRowError(row.rowNumber(), "Students:group_name",
-                    "You have no class registered for group " + gradeName + " " + groupName + " (" + year + ")"));
             return null;
         }
         return groupId.get();
@@ -781,10 +770,10 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         if (cached != null) {
             return cached;
         }
-        Optional<Group> group = groups.findByGradeNameAndNameAndAcademicYear(key.gradeName(), key.groupName(),
+        Optional<Group> group = groups.findByGradeNameAndNameAndAcademicYear(teacherId, key.gradeName(), key.groupName(),
                 key.academicYear());
-        Optional<Subject> subject = subjects.findByName(key.subjectName());
-        Optional<AcademicPeriod> period = academicPeriods.findByName(key.academicPeriodName());
+        Optional<Subject> subject = subjects.findByTeacherIdAndName(teacherId, key.subjectName());
+        Optional<AcademicPeriod> period = academicPeriods.findByTeacherIdAndName(teacherId, key.academicPeriodName());
         Optional<TeachingPeriod> teachingPeriod = Optional.empty();
         if (group.isPresent() && subject.isPresent() && period.isPresent()) {
             teachingPeriod = teachingAssignments

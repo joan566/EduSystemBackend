@@ -39,14 +39,14 @@ public class AcademicPeriodRepositoryAdapter implements AcademicPeriodRepository
     }
 
     @Override
-    public Optional<AcademicPeriod> findByName(String name) {
-        return repository.findByName(name).map(mapper::toDomain);
+    public Optional<AcademicPeriod> findByTeacherIdAndName(Long teacherId, String name) {
+        return repository.findFirstByTeacherIdAndNameOrderByIdAsc(teacherId, name).map(mapper::toDomain);
     }
 
     @Override
-    public PageResult<AcademicPeriod> findAll(PageQuery page) {
-        return PageMapper.toResult(repository.findAll(PageMapper.pageable(page, Sort.by(Sort.Direction.DESC, "startDate"))),
-                mapper::toDomain);
+    public PageResult<AcademicPeriod> findByTeacherId(Long teacherId, PageQuery page) {
+        return PageMapper.toResult(repository.findByTeacherId(teacherId,
+                PageMapper.pageable(page, Sort.by(Sort.Direction.DESC, "startDate"))), mapper::toDomain);
     }
 
     @Override

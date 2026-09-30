@@ -10,8 +10,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface SpringDataSubjectRepository extends JpaRepository<SubjectEntity, Long> {
 
-    Optional<SubjectEntity> findByName(String name);
+    Optional<SubjectEntity> findByTeacherIdAndName(Long teacherId, String name);
 
-    @Query("select s from SubjectEntity s where lower(s.name) like :pattern")
-    Page<SubjectEntity> search(@Param("pattern") String pattern, Pageable pageable);
+    @Query("select s from SubjectEntity s where s.teacherId = :teacherId and lower(s.name) like :pattern")
+    Page<SubjectEntity> search(@Param("teacherId") Long teacherId, @Param("pattern") String pattern, Pageable pageable);
 }

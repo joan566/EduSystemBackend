@@ -8,7 +8,7 @@ public interface ManageGradingScaleUseCase {
 
     GradingScale create(GradingCommands.CreateScale command);
 
-    GradingScale get(Long scaleId);
+    GradingScale get(Long teacherId, Long scaleId);
 
-    List<GradingScale> list();
+    List<GradingScale> list(Long teacherId);
 }

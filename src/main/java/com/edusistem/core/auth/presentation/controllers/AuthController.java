@@ -2,11 +2,13 @@ package com.edusistem.core.auth.presentation.controllers;
 
 import com.edusistem.core.auth.application.use_case.dtos.AuthCommands;
 import com.edusistem.core.auth.domain.inputports.ChangePasswordUseCase;
+import com.edusistem.core.auth.domain.inputports.DeleteAccountUseCase;
 import com.edusistem.core.auth.domain.inputports.LoginUseCase;
 import com.edusistem.core.auth.domain.inputports.PasswordRecoveryUseCase;
 import com.edusistem.core.auth.domain.inputports.RefreshSessionUseCase;
 import com.edusistem.core.auth.domain.inputports.RegisterUserUseCase;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.ChangePasswordRequest;
+import com.edusistem.core.auth.presentation.dtos.AuthRequests.DeleteAccountRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.ForgotPasswordRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.LoginRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.RefreshRequest;
@@ -25,6 +27,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,24 +46,27 @@ public class AuthController {
     private final PasswordRecoveryUseCase recovery;
     private final GetCurrentUserUseCase currentUser;
     private final RefreshSessionUseCase refresh;
+    private final DeleteAccountUseCase deleteAccount;
 
     public AuthController(RegisterUserUseCase register, LoginUseCase login, ChangePasswordUseCase changePassword,
                           PasswordRecoveryUseCase recovery, GetCurrentUserUseCase currentUser,
-                          RefreshSessionUseCase refresh) {
+                          RefreshSessionUseCase refresh, DeleteAccountUseCase deleteAccount) {
         this.register = register;
         this.login = login;
         this.changePassword = changePassword;
         this.recovery = recovery;
         this.currentUser = currentUser;
         this.refresh = refresh;
+        this.deleteAccount = deleteAccount;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @SecurityRequirements
-    @Operation(summary = "Registra una cuenta de profesor y devuelve la sesión")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return AuthResponse.from(register.register(request.toCommand()));
+    @Operation(summary = "Registra una cuenta de profesor y devuelve la sesión",
+            description = "Limitado por IP: al superarlo responde 429 con cabecera Retry-After.")
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+        return AuthResponse.from(register.register(request.toCommand(http.getRemoteAddr())));
     }
 
     @PostMapping("/login")
@@ -99,29 +105,39 @@ public class AuthController {
                 new AuthCommands.ChangePassword(user.id(), request.currentPassword(), request.newPassword())));
     }
 
+    @DeleteMapping("/account")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Elimina la cuenta y TODOS sus datos (estudiantes, notas, archivos...); pide la contraseña",
+            description = "No se puede deshacer. Las sesiones dejan de valer de inmediato.")
+    public void deleteAccount(@AuthenticationPrincipal AuthenticatedUser user,
+                              @Valid @RequestBody DeleteAccountRequest request) {
+        deleteAccount.deleteAccount(user.id(), request.password());
+    }
+
     @PostMapping("/forgot-password")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @SecurityRequirements
-    @Operation(summary = "Solicita un código de recuperación por correo (respuesta idéntica exista o no el correo)")
-    public MessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        recovery.forgotPassword(new AuthCommands.ForgotPassword(request.email()));
+    @Operation(summary = "Solicita un código de recuperación por correo (respuesta idéntica exista o no el correo)",
+            description = "Limitado por correo y por IP: al superarlo responde 429 con cabecera Retry-After.")
+    public MessageResponse forgotPassword(@Valid @RequestBody ForgotPasswordRequest request, HttpServletRequest http) {
+        recovery.forgotPassword(new AuthCommands.ForgotPassword(request.email(), http.getRemoteAddr()));
         return new MessageResponse("If the email is registered, a verification code has been sent");
     }
 
     @PostMapping("/verify-code")
     @SecurityRequirements
     @Operation(summary = "Verifica un código de recuperación")
-    public MessageResponse verifyCode(@Valid @RequestBody VerifyCodeRequest request) {
-        recovery.verifyCode(new AuthCommands.VerifyResetCode(request.email(), request.code()));
+    public MessageResponse verifyCode(@Valid @RequestBody VerifyCodeRequest request, HttpServletRequest http) {
+        recovery.verifyCode(new AuthCommands.VerifyResetCode(request.email(), request.code(), http.getRemoteAddr()));
         return new MessageResponse("The code is valid");
     }
 
     @PostMapping("/reset-password")
     @SecurityRequirements
     @Operation(summary = "Restablece la contraseña con un código válido")
-    public MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        recovery.resetPassword(
-                new AuthCommands.ResetPassword(request.email(), request.code(), request.newPassword()));
+    public MessageResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest http) {
+        recovery.resetPassword(new AuthCommands.ResetPassword(request.email(), request.code(), request.newPassword(),
+                http.getRemoteAddr()));
         return new MessageResponse("Password updated");
     }
 }

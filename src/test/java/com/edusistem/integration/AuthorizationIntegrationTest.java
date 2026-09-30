@@ -95,21 +95,67 @@ class AuthorizationIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    void sharedCatalogItemsUsedByAnotherTeacherCannotBeModifiedOrDeleted() {
+    void catalogsArePrivateToEachTeacher() {
         Teacher a = newTeacher();
         Teacher b = newTeacher();
         Context ca = newContext(a);
-        assertError(put(b, "/api/v1/groups/" + ca.groupId(), Map.of("name", "Renombrado", "academicYear", YEAR), 409), 409, "CATALOG_ITEM_IN_USE");
-        assertError(put(b, "/api/v1/grades/" + ca.gradeId(), Map.of("name", "Otro"), 409), 409, "CATALOG_ITEM_IN_USE");
-        assertError(put(b, "/api/v1/subjects/" + ca.subjectId(), Map.of("name", "Otro"), 409), 409, "CATALOG_ITEM_IN_USE");
+
+        // B no ve los catálogos de A
+        assertThat(get(b, "/api/v1/grades", 200).size()).isZero();
+        assertThat(get(b, "/api/v1/groups", 200).get("totalElements").asInt()).isZero();
+        assertThat(get(b, "/api/v1/subjects", 200).get("totalElements").asInt()).isZero();
+        assertThat(get(b, "/api/v1/academic-periods", 200).get("totalElements").asInt()).isZero();
+        assertError(get(b, "/api/v1/grades/" + ca.gradeId(), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(get(b, "/api/v1/groups/" + ca.groupId(), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(get(b, "/api/v1/subjects/" + ca.subjectId(), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(get(b, "/api/v1/academic-periods/" + ca.academicPeriodId(), 404), 404, "RESOURCE_NOT_FOUND");
+
+        // ni puede modificarlos o borrarlos
+        assertError(put(b, "/api/v1/groups/" + ca.groupId(), Map.of("name", "Renombrado", "academicYear", YEAR), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(put(b, "/api/v1/grades/" + ca.gradeId(), Map.of("name", "Otro"), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(put(b, "/api/v1/subjects/" + ca.subjectId(), Map.of("name", "Otro"), 404), 404, "RESOURCE_NOT_FOUND");
         assertError(put(b, "/api/v1/academic-periods/" + ca.academicPeriodId(),
-                Map.of("name", "X", "startDate", YEAR + "-01-01", "endDate", YEAR + "-02-01"), 409), 409, "CATALOG_ITEM_IN_USE");
-        assertError(call("DELETE", b, "/api/v1/grades/" + ca.gradeId(), null, 409), 409, "GRADE_HAS_GROUPS");
-        assertError(call("DELETE", b, "/api/v1/groups/" + ca.groupId(), null, 409), 409, "GROUP_HAS_DEPENDENTS");
-        assertError(call("DELETE", b, "/api/v1/subjects/" + ca.subjectId(), null, 409), 409, "SUBJECT_HAS_TEACHING_ASSIGNMENTS");
-        // el mismo grupo compartido sí puede asignarse a otro profesor (escenario Joan/Carlos)
-        JsonNode assignment = post(b, "/api/v1/teaching-assignments", Map.of("groupId", ca.groupId(), "subjectId", ca.subjectId()), 201);
-        assertThat(assignment.get("groupId").asLong()).isEqualTo(ca.groupId());
+                Map.of("name", "X", "startDate", YEAR + "-01-01", "endDate", YEAR + "-02-01"), 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(call("DELETE", b, "/api/v1/grades/" + ca.gradeId(), null, 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(call("DELETE", b, "/api/v1/groups/" + ca.groupId(), null, 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(call("DELETE", b, "/api/v1/subjects/" + ca.subjectId(), null, 404), 404, "RESOURCE_NOT_FOUND");
+        assertError(call("DELETE", b, "/api/v1/academic-periods/" + ca.academicPeriodId(), null, 404), 404, "RESOURCE_NOT_FOUND");
+
+        // ni usarlos para ganar acceso a los estudiantes de A
+        Context cb = newContext(b);
+        assertError(post(b, "/api/v1/teaching-assignments", Map.of("groupId", ca.groupId(), "subjectId", cb.subjectId()), 404),
+                404, "RESOURCE_NOT_FOUND");
+        assertError(post(b, "/api/v1/teaching-assignments", Map.of("groupId", cb.groupId(), "subjectId", ca.subjectId()), 404),
+                404, "RESOURCE_NOT_FOUND");
+        assertError(post(b, "/api/v1/groups", Map.of("gradeId", ca.gradeId(), "name", "Intruso", "academicYear", YEAR), 404),
+                404, "RESOURCE_NOT_FOUND");
+        long otherAssignment = post(b, "/api/v1/teaching-assignments", Map.of("groupId", cb.groupId(),
+                "subjectId", post(b, "/api/v1/subjects", Map.of("name", unique("Subj")), 201).get("id").asLong()), 201)
+                .get("id").asLong();
+        assertError(post(b, "/api/v1/teaching-periods", Map.of("teachingAssignmentId", otherAssignment,
+                "academicPeriodId", ca.academicPeriodId()), 404), 404, "RESOURCE_NOT_FOUND");
+
+        // los nombres son únicos por profesor, no globalmente
+        post(b, "/api/v1/grades", Map.of("name", ca.gradeName()), 201);
+
+        // y A sigue igual
+        assertThat(get(a, "/api/v1/groups/" + ca.groupId(), 200).get("name").asText()).isEqualTo(ca.groupName());
+    }
+
+    @Test
+    void customGradingScalesArePrivateAndSystemScalesAreShared() {
+        Teacher a = newTeacher();
+        Teacher b = newTeacher();
+        long privateScale = post(a, "/api/v1/grading-scales", Map.of("name", unique("Escala"), "minimumValue", 1,
+                "maximumValue", 7), 201).get("id").asLong();
+        assertThat(get(a, "/api/v1/grading-scales", 200).toString()).contains("\"id\":" + privateScale + ",");
+        assertThat(get(b, "/api/v1/grading-scales", 200).toString()).doesNotContain("\"id\":" + privateScale + ",")
+                .contains("Colombian 0-5");
+        assertError(get(b, "/api/v1/grading-scales/" + privateScale, 404), 404, "RESOURCE_NOT_FOUND");
+        Context cb = newContext(b);
+        assertError(put(b, "/api/v1/teaching-periods/" + cb.teachingPeriodId() + "/grading-configuration",
+                Map.of("gradingScaleId", privateScale, "weights", List.of(Map.of("evaluationCategoryId", categoryId("EXAMS"),
+                        "weight", 100))), 404), 404, "RESOURCE_NOT_FOUND");
     }
 
     @Test

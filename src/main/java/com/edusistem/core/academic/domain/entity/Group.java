@@ -14,6 +14,8 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Group {
     private Long id;
+    /** Profesor dueño; nunca se comparte con otros profesores. */
+    private Long teacherId;
     private Long gradeId;
     private String name;
     private int academicYear;

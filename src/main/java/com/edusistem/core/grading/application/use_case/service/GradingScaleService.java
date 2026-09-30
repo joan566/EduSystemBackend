@@ -10,6 +10,7 @@ import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import java.util.List;
 
+/** Escalas del sistema (solo lectura, para todos) más las privadas que crea cada profesor. */
 public class GradingScaleService implements ManageGradingScaleUseCase {
 
     private final GradingScaleRepositoryPort scales;
@@ -23,21 +24,22 @@ public class GradingScaleService implements ManageGradingScaleUseCase {
     @Override
     @UseCaseTransactional
     public GradingScale create(GradingCommands.CreateScale command) {
-        GradingScale scale = GradingScale.builder().name(command.name() == null ? null : command.name().trim())
+        GradingScale scale = GradingScale.builder().teacherId(command.teacherId())
+                .name(command.name() == null ? null : command.name().trim())
                 .minimumValue(command.minimumValue()).maximumValue(command.maximumValue()).build();
         scale.validate();
         GradingScale saved = scales.save(scale);
-        audit.success(command.actorId(), AuditAction.CREATE, "GradingScale", saved.getId(), saved.getName());
+        audit.success(command.teacherId(), AuditAction.CREATE, "GradingScale", saved.getId(), saved.getName());
         return saved;
     }
 
     @Override
-    public GradingScale get(Long scaleId) {
-        return scales.findById(scaleId).orElseThrow(() -> ResourceNotFoundException.of("GradingScale", scaleId));
+    public GradingScale get(Long teacherId, Long scaleId) {
+        return scales.findById(scaleId).filter(s -> s.isVisibleTo(teacherId)).orElseThrow(() -> ResourceNotFoundException.of("GradingScale", scaleId));
     }
 
     @Override
-    public List<GradingScale> list() {
-        return scales.findAll();
+    public List<GradingScale> list(Long teacherId) {
+        return scales.findVisibleTo(teacherId);
     }
 }

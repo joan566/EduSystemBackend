@@ -16,6 +16,7 @@ import com.edusistem.core.activity.domain.outputports.ActivityRepositoryPort;
 import com.edusistem.core.attendance.domain.inputports.ManageAttendanceUseCase;
 import com.edusistem.core.attendance.domain.outputports.AttendanceSessionRepositoryPort;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.imports.application.use_case.service.ImportFileRetentionService;
 import com.edusistem.core.imports.application.use_case.service.ImportQueryService;
 import com.edusistem.core.imports.application.use_case.service.ImportSchoolSetupService;
 import com.edusistem.core.imports.application.use_case.service.ImportStudentsService;
@@ -25,7 +26,6 @@ import com.edusistem.core.imports.domain.outputports.ImportBatchRepositoryPort;
 import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
-import com.edusistem.core.shared.domain.outputports.OwnershipPort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.student.domain.inputports.RegisterStudentUseCase;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
@@ -50,6 +50,11 @@ public class ImportBeanConfig {
     }
 
     @Bean
+    ImportFileRetentionService importFileRetentionService(ImportBatchRepositoryPort batches, FileStoragePort storage) {
+        return new ImportFileRetentionService(batches, storage);
+    }
+
+    @Bean
     ImportSchoolSetupService importSchoolSetupService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
                                                       ImportBatchRepositoryPort batches, FileStoragePort storage,
                                                       RecordAuditUseCase audit, Clock clock,
@@ -63,8 +68,7 @@ public class ImportBeanConfig {
                                                       ManageTeachingAssignmentUseCase manageTeachingAssignment,
                                                       TeachingPeriodRepositoryPort teachingPeriods,
                                                       ManageTeachingPeriodUseCase manageTeachingPeriod,
-                                                      StudentRepositoryPort students, OwnershipPort ownership,
-                                                      StudentImportApplier applier,
+                                                      StudentRepositoryPort students, StudentImportApplier applier,
                                                       ActivityRepositoryPort activityRepo,
                                                       ManageActivityUseCase manageActivity,
                                                       GradeActivityUseCase gradeActivity,
@@ -73,7 +77,7 @@ public class ImportBeanConfig {
         return new ImportSchoolSetupService(reader, writer, batches, storage, audit, clock, academicPeriods,
                                             manageAcademicPeriod, grades, manageGrade, subjects, manageSubject,
                                             groups, manageGroup, teachingAssignments, manageTeachingAssignment,
-                                            teachingPeriods, manageTeachingPeriod, students, ownership, applier,
+                                            teachingPeriods, manageTeachingPeriod, students, applier,
                                             activityRepo, manageActivity, gradeActivity, sessions, attendance);
     }
 
@@ -81,9 +85,9 @@ public class ImportBeanConfig {
     ImportStudentsService importStudentsService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
                                                 ImportBatchRepositoryPort batches, StudentRepositoryPort students,
                                                 GradeRepositoryPort grades, GroupRepositoryPort groups,
-                                                OwnershipPort ownership, FileStoragePort storage,
-                                                StudentImportApplier applier, RecordAuditUseCase audit, Clock clock) {
-        return new ImportStudentsService(reader, writer, batches, students, grades, groups, ownership, storage,
+                                                FileStoragePort storage, StudentImportApplier applier,
+                                                RecordAuditUseCase audit, Clock clock) {
+        return new ImportStudentsService(reader, writer, batches, students, grades, groups, storage,
                                          applier, audit, clock);
     }
 
@@ -92,7 +96,7 @@ public class ImportBeanConfig {
                                                                     SpreadsheetWriterPort writer,
                                                                     ImportBatchRepositoryPort batches,
                                                                     StudentRepositoryPort students,
-                                                                    OwnershipPort ownership, OwnershipGuard guard,
+                                                                    OwnershipGuard guard,
                                                                     TeachingPeriodRepositoryPort teachingPeriods,
                                                                     ActivityRepositoryPort activities,
                                                                     GradeActivityUseCase gradeActivity,
@@ -101,7 +105,7 @@ public class ImportBeanConfig {
                                                                     StudentImportApplier applier,
                                                                     FileStoragePort storage,
                                                                     RecordAuditUseCase audit, Clock clock) {
-        return new ImportTeachingPeriodDataService(reader, writer, batches, students, ownership, guard,
+        return new ImportTeachingPeriodDataService(reader, writer, batches, students, guard,
                                                    teachingPeriods, activities, gradeActivity, sessions, attendance,
                                                    applier, storage, audit, clock);
     }

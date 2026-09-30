@@ -11,9 +11,9 @@ public interface ManageGroupUseCase {
 
     GroupView update(AcademicCommands.UpdateGroup command);
 
-    void delete(Long actorId, Long groupId);
+    void delete(Long teacherId, Long groupId);
 
-    GroupView get(Long groupId);
+    GroupView get(Long teacherId, Long groupId);
 
-    PageResult<GroupView> search(Long gradeId, Integer academicYear, PageQuery page);
+    PageResult<GroupView> search(Long teacherId, Long gradeId, Integer academicYear, PageQuery page);
 }

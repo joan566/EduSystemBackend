@@ -32,6 +32,7 @@ import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentGroupRepositoryPort;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -113,6 +114,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
                 .studentId(student.getId()).build());
         submission.setStudentCode(student.getStudentCode());
         submission.setDetectedQrData(qrText);
+        String previousImagePath = submission.getImagePath();
         submission.setImagePath(storage.store("submissions/exam-" + exam.getId(), command.fileName(), command.image()));
         submission.setSubmittedAt(now);
         submission.setStatus(ExamSubmissionStatus.PROCESSING);
@@ -130,6 +132,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
         }
 
         ExamSubmission saved = submissions.save(submission);
+        deletePreviousImage(previousImagePath, saved.getImagePath());
         AuditTarget target = SubmissionReviewService.target(saved, ctx, student);
         if (saved.getStatus() == ExamSubmissionStatus.FAILED) {
             audit.failure(command.teacherId(), AuditAction.EXAM_PROCESSED, target, saved.getStatusDetail());
@@ -138,6 +141,18 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
                     "status " + saved.getStatus() + ", score " + saved.getScore() + ", finalGrade " + saved.getFinalGrade());
         }
         return assembler.assemble(saved);
+    }
+
+    /** Al reemplazar una hoja, la foto anterior (datos del estudiante) no debe quedar huérfana en disco. */
+    private void deletePreviousImage(String previousPath, String currentPath) {
+        if (previousPath == null || previousPath.equals(currentPath)) {
+            return;
+        }
+        try {
+            storage.delete(previousPath);
+        } catch (IOException | RuntimeException e) {
+            log.warn("Could not delete the replaced answer sheet image {}", previousPath, e);
+        }
     }
 
     private void applyReading(ExamSubmission submission, Exam exam, GradingScale scale, BigDecimal maximumScore,
@@ -168,7 +183,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
             if (payload.examId() != ctx.exam().getId()) {
                 throw new BusinessRuleException("QR_EXAM_MISMATCH", "The QR code belongs to a different exam");
             }
-            student = students.findByStudentCode(payload.studentCode()).orElseThrow(
+            student = students.findByTeacherIdAndStudentCode(command.teacherId(), payload.studentCode()).orElseThrow(
                     () -> new BusinessRuleException("QR_STUDENT_NOT_FOUND", "The QR code refers to an unknown student"));
             if (command.studentId() != null && !command.studentId().equals(student.getId())) {
                 throw new BusinessRuleException("STUDENT_MISMATCH", "The QR code belongs to a different student");

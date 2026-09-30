@@ -10,9 +10,9 @@ public interface GradeRepositoryPort {
 
     Optional<Grade> findById(Long id);
 
-    Optional<Grade> findByName(String name);
+    Optional<Grade> findByTeacherIdAndName(Long teacherId, String name);
 
-    List<Grade> findAllOrderedByName();
+    List<Grade> findByTeacherIdOrderedByName(Long teacherId);
 
     boolean hasGroups(Long gradeId);
 

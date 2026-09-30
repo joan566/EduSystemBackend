@@ -10,9 +10,9 @@ public interface ManageGradeUseCase {
 
     Grade update(AcademicCommands.UpdateGrade command);
 
-    void delete(Long actorId, Long gradeId);
+    void delete(Long teacherId, Long gradeId);
 
-    Grade get(Long gradeId);
+    Grade get(Long teacherId, Long gradeId);
 
-    List<Grade> list();
+    List<Grade> list(Long teacherId);
 }

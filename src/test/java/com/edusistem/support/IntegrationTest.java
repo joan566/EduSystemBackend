@@ -91,9 +91,22 @@ public abstract class IntegrationTest {
         return new Teacher(body.get("user").get("id").asLong(), email, body.get("accessToken").asText());
     }
 
+    /** IP de cliente distinta en cada petición, para que los límites por IP no se crucen entre tests. */
+    protected static String nextIp() {
+        int n = SEQ.incrementAndGet();
+        return "10." + ((n >> 16) & 0xFF) + "." + ((n >> 8) & 0xFF) + "." + (n & 0xFF);
+    }
+
     protected MvcResult perform(String method, Teacher teacher, String url, Object body) {
+        return perform(method, teacher, url, body, nextIp());
+    }
+
+    protected MvcResult perform(String method, Teacher teacher, String url, Object body, String clientIp) {
         try {
-            MockHttpServletRequestBuilder builder = request(HttpMethod.valueOf(method), url);
+            MockHttpServletRequestBuilder builder = request(HttpMethod.valueOf(method), url).with(r -> {
+                r.setRemoteAddr(clientIp);
+                return r;
+            });
             if (teacher != null) {
                 builder.header("Authorization", "Bearer " + teacher.token());
             }
@@ -109,6 +122,11 @@ public abstract class IntegrationTest {
     protected JsonNode call(String method, Teacher teacher, String url, Object body, int expectedStatus) {
         MvcResult result = perform(method, teacher, url, body);
         return parse(result, expectedStatus);
+    }
+
+    /** Como {@link #call} pero desde una IP concreta (para probar los límites por IP). */
+    protected MvcResult callFrom(String clientIp, String method, String url, Object body) {
+        return perform(method, null, url, body, clientIp);
     }
 
     protected JsonNode parse(MvcResult result, int expectedStatus) {
@@ -189,7 +207,7 @@ public abstract class IntegrationTest {
     }
 
     protected long scaleId(String name) {
-        return jdbc.queryForObject("select id from grading_scales where name = ?", Long.class, name);
+        return jdbc.queryForObject("select id from grading_scales where teacher_id is null and name = ?", Long.class, name);
     }
 
     protected long categoryId(String name) {

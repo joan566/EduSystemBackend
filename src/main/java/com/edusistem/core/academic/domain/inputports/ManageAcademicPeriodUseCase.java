@@ -11,9 +11,9 @@ public interface ManageAcademicPeriodUseCase {
 
     AcademicPeriod update(AcademicCommands.SavePeriod command);
 
-    void delete(Long actorId, Long periodId);
+    void delete(Long teacherId, Long periodId);
 
-    AcademicPeriod get(Long periodId);
+    AcademicPeriod get(Long teacherId, Long periodId);
 
-    PageResult<AcademicPeriod> list(PageQuery page);
+    PageResult<AcademicPeriod> list(Long teacherId, PageQuery page);
 }

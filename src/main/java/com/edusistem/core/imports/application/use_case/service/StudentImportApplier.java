@@ -19,17 +19,18 @@ public class StudentImportApplier {
     }
 
     @UseCaseTransactional
-    public void apply(List<StudentImportRow> rows) {
+    public void apply(Long teacherId, List<StudentImportRow> rows) {
         for (StudentImportRow row : rows) {
             Long studentId = row.existingStudentId();
             if (studentId == null) {
-                Student created = students.create(new StudentCommands.Create(row.identificationNumber(),
+                Student created = students.create(new StudentCommands.Create(teacherId, row.identificationNumber(),
                         row.studentCode(), row.firstName(), row.lastName(), row.email()));
                 studentId = created.getId();
-            } else if (row.updateData()) {
-                students.update(new StudentCommands.Update(studentId, row.firstName(), row.lastName(), row.email()));
+            } else {
+                students.update(new StudentCommands.Update(teacherId, studentId, row.firstName(), row.lastName(),
+                        row.email()));
             }
-            students.enroll(new StudentCommands.Enroll(studentId, row.groupId()));
+            students.enroll(new StudentCommands.Enroll(teacherId, studentId, row.groupId()));
         }
     }
 }

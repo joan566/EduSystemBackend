@@ -160,15 +160,38 @@ class ImportIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    void cannotImportIntoAGroupTheTeacherDoesNotTeach() {
+    void cannotImportIntoAnotherTeachersGroup() {
         Teacher a = newTeacher();
         Teacher b = newTeacher();
         Context ca = newContext(a);
         JsonNode result = importFile(b, xlsx(IMPORT_HEADERS, List.of(row(unique("ID"), "Intruso", "X", "", ca, YEAR))), "s.xlsx", 201);
         assertThat(result.get("successfulRows").asInt()).isZero();
         assertThat(result.get("status").asText()).isEqualTo("FAILED");
-        assertThat(result.get("errors").toString()).contains("no teaching assignment");
+        // los grados y grupos de A no existen para B
+        assertThat(result.get("errors").toString()).contains("does not exist");
         assertThat(get(a, "/api/v1/students?groupId=" + ca.groupId(), 200).get("totalElements").asInt()).isZero();
+    }
+
+    @Test
+    void sameIdentificationCreatesIndependentStudentsPerTeacher() {
+        Teacher a = newTeacher();
+        Teacher b = newTeacher();
+        Context ca = newContext(a);
+        Context cb = newContext(b);
+        String id = unique("ID");
+        importFile(a, xlsx(IMPORT_HEADERS, List.of(row(id, "Ana", "Original", "ana@example.com", ca, YEAR))), "a.xlsx", 201);
+        JsonNode result = importFile(b, xlsx(IMPORT_HEADERS, List.of(row(id, "Otro", "Nombre", "", cb, YEAR))), "b.xlsx", 201);
+        assertThat(result.get("successfulRows").asInt()).isEqualTo(1);
+
+        // B obtiene su propio estudiante; el de A no cambia ni se matricula en el grupo de B
+        long studentOfA = listStudents(a, ca.groupId()).get(0).id();
+        long studentOfB = listStudents(b, cb.groupId()).get(0).id();
+        assertThat(studentOfB).isNotEqualTo(studentOfA);
+        JsonNode detailOfA = get(a, "/api/v1/students/" + studentOfA, 200);
+        assertThat(detailOfA.toString()).contains("Original").doesNotContain("Nombre");
+        assertThat(jdbc.queryForObject("select count(*) from student_groups where student_id = ?", Integer.class,
+                studentOfA)).isEqualTo(1);
+        assertError(get(b, "/api/v1/students/" + studentOfA, 404), 404, "RESOURCE_NOT_FOUND");
     }
 
     @Test

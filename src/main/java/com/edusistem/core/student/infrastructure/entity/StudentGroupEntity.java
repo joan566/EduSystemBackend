@@ -26,6 +26,9 @@ public class StudentGroupEntity {
     @Column(name = "group_id")
     private Long groupId;
 
+    @Column(name = "teacher_id", nullable = false, updatable = false)
+    private Long teacherId;
+
     @Column(name = "enrolled_at", nullable = false)
     private LocalDateTime enrolledAt;
 

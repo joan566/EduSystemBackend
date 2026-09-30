@@ -8,7 +8,7 @@ public final class GradingCommands {
     private GradingCommands() {
     }
 
-    public record CreateScale(Long actorId, String name, BigDecimal minimumValue, BigDecimal maximumValue) {
+    public record CreateScale(Long teacherId, String name, BigDecimal minimumValue, BigDecimal maximumValue) {
     }
 
     public record WeightInput(Long evaluationCategoryId, BigDecimal weight) {

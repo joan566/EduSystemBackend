@@ -20,6 +20,8 @@ import lombok.Setter;
 public class GradingScale {
 
     private Long id;
+    /** Profesor dueño; null = escala del sistema (solo lectura, visible para todos). */
+    private Long teacherId;
     private String name;
     private BigDecimal minimumValue;
     private BigDecimal maximumValue;
@@ -32,6 +34,10 @@ public class GradingScale {
         if (minimumValue == null || maximumValue == null || minimumValue.compareTo(maximumValue) >= 0) {
             throw new InvalidRequestException("INVALID_GRADING_SCALE", "minimumValue must be lower than maximumValue");
         }
+    }
+
+    public boolean isVisibleTo(Long teacherIdToCheck) {
+        return teacherId == null || teacherId.equals(teacherIdToCheck);
     }
 
     public boolean contains(BigDecimal value) {

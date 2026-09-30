@@ -44,16 +44,17 @@ public class AcademicPeriodController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista paginada de periodos académicos")
-    public PageResponse<AcademicPeriodResponse> list(@RequestParam(required = false) Integer page,
+    @Operation(summary = "Lista paginada de los periodos académicos del profesor")
+    public PageResponse<AcademicPeriodResponse> list(@AuthenticationPrincipal AuthenticatedUser user,
+                                                     @RequestParam(required = false) Integer page,
                                                      @RequestParam(required = false) Integer size) {
-        return PageResponse.from(periods.list(PageQuery.of(page, size)), AcademicPeriodResponse::from);
+        return PageResponse.from(periods.list(user.id(), PageQuery.of(page, size)), AcademicPeriodResponse::from);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Consulta un periodo académico")
-    public AcademicPeriodResponse get(@PathVariable Long id) {
-        return AcademicPeriodResponse.from(periods.get(id));
+    public AcademicPeriodResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return AcademicPeriodResponse.from(periods.get(user.id(), id));
     }
 
     @PutMapping("/{id}")

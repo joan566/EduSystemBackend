@@ -22,6 +22,9 @@ public class StudentEntity extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "teacher_id", nullable = false, updatable = false)
+    private Long teacherId;
+
     @Column(name = "identification_number", length = 50)
     private String identificationNumber;
 

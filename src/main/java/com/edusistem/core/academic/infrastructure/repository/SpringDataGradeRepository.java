@@ -7,7 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SpringDataGradeRepository extends JpaRepository<GradeEntity, Long> {
 
-    Optional<GradeEntity> findByName(String name);
+    Optional<GradeEntity> findByTeacherIdAndName(Long teacherId, String name);
 
-    List<GradeEntity> findAllByOrderByNameAsc();
+    List<GradeEntity> findByTeacherIdOrderByNameAsc(Long teacherId);
 }

@@ -22,6 +22,9 @@ public class SubjectEntity extends AuditableEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "teacher_id", nullable = false, updatable = false)
+    private Long teacherId;
+
     @Column(nullable = false, length = 100)
     private String name;
 

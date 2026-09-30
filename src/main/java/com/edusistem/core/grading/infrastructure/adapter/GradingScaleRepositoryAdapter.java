@@ -6,7 +6,6 @@ import com.edusistem.core.grading.infrastructure.mapper.GradingMapper;
 import com.edusistem.core.grading.infrastructure.repository.SpringDataGradingScaleRepository;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -31,7 +30,7 @@ public class GradingScaleRepositoryAdapter implements GradingScaleRepositoryPort
     }
 
     @Override
-    public List<GradingScale> findAll() {
-        return repository.findAll(Sort.by("id")).stream().map(mapper::toDomain).toList();
+    public List<GradingScale> findVisibleTo(Long teacherId) {
+        return repository.findVisibleTo(teacherId).stream().map(mapper::toDomain).toList();
     }
 }

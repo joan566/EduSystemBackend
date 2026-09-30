@@ -10,5 +10,6 @@ public interface GradingScaleRepositoryPort {
 
     Optional<GradingScale> findById(Long id);
 
-    List<GradingScale> findAll();
+    /** Escalas del sistema más las propias del profesor. */
+    List<GradingScale> findVisibleTo(Long teacherId);
 }

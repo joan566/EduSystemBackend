@@ -41,15 +41,15 @@ public class GradeController {
     }
 
     @GetMapping
-    @Operation(summary = "Lista todos los grados (catálogo corto, sin paginar)")
-    public List<GradeResponse> list() {
-        return grades.list().stream().map(GradeResponse::from).toList();
+    @Operation(summary = "Lista los grados del profesor (catálogo corto, sin paginar)")
+    public List<GradeResponse> list(@AuthenticationPrincipal AuthenticatedUser user) {
+        return grades.list(user.id()).stream().map(GradeResponse::from).toList();
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Consulta un grado")
-    public GradeResponse get(@PathVariable Long id) {
-        return GradeResponse.from(grades.get(id));
+    public GradeResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return GradeResponse.from(grades.get(user.id(), id));
     }
 
     @PutMapping("/{id}")

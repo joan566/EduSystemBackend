@@ -9,18 +9,16 @@ import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.shared.domain.exceptions.ConflictException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
-import com.edusistem.core.shared.domain.outputports.CatalogUsagePort;
 import java.util.List;
 
+/** Grados propios del profesor; los de otros profesores responden 404. */
 public class GradeService implements ManageGradeUseCase {
 
     private final GradeRepositoryPort grades;
-    private final CatalogUsagePort usage;
     private final RecordAuditUseCase audit;
 
-    public GradeService(GradeRepositoryPort grades, CatalogUsagePort usage, RecordAuditUseCase audit) {
+    public GradeService(GradeRepositoryPort grades, RecordAuditUseCase audit) {
         this.grades = grades;
-        this.usage = usage;
         this.audit = audit;
     }
 
@@ -28,51 +26,50 @@ public class GradeService implements ManageGradeUseCase {
     @UseCaseTransactional
     public Grade create(AcademicCommands.CreateGrade command) {
         String name = command.name().trim();
-        requireNameAvailable(name, null);
-        Grade saved = grades.save(Grade.builder().name(name).description(blankToNull(command.description())).build());
-        audit.success(command.actorId(), AuditAction.CREATE, "Grade", saved.getId(), name);
+        requireNameAvailable(command.teacherId(), name, null);
+        Grade saved = grades.save(Grade.builder().teacherId(command.teacherId()).name(name)
+                .description(blankToNull(command.description())).build());
+        audit.success(command.teacherId(), AuditAction.CREATE, "Grade", saved.getId(), name);
         return saved;
     }
 
     @Override
     @UseCaseTransactional
     public Grade update(AcademicCommands.UpdateGrade command) {
-        Grade grade = get(command.gradeId());
-        if (usage.gradeUsedByOtherTeachers(grade.getId(), command.actorId())) {
-            throw new ConflictException("CATALOG_ITEM_IN_USE", "The grade is used by other teachers and cannot be modified");
-        }
+        Grade grade = get(command.teacherId(), command.gradeId());
         String name = command.name().trim();
-        requireNameAvailable(name, grade.getId());
+        requireNameAvailable(command.teacherId(), name, grade.getId());
         grade.setName(name);
         grade.setDescription(blankToNull(command.description()));
         Grade saved = grades.save(grade);
-        audit.success(command.actorId(), AuditAction.UPDATE, "Grade", saved.getId(), name);
+        audit.success(command.teacherId(), AuditAction.UPDATE, "Grade", saved.getId(), name);
         return saved;
     }
 
     @Override
     @UseCaseTransactional
-    public void delete(Long actorId, Long gradeId) {
-        Grade grade = get(gradeId);
+    public void delete(Long teacherId, Long gradeId) {
+        Grade grade = get(teacherId, gradeId);
         if (grades.hasGroups(gradeId)) {
             throw new ConflictException("GRADE_HAS_GROUPS", "The grade has groups and cannot be deleted");
         }
         grades.deleteById(gradeId);
-        audit.success(actorId, AuditAction.DELETE, "Grade", gradeId, grade.getName());
+        audit.success(teacherId, AuditAction.DELETE, "Grade", gradeId, grade.getName());
     }
 
     @Override
-    public Grade get(Long gradeId) {
-        return grades.findById(gradeId).orElseThrow(() -> ResourceNotFoundException.of("Grade", gradeId));
+    public Grade get(Long teacherId, Long gradeId) {
+        return grades.findById(gradeId).filter(g -> g.getTeacherId().equals(teacherId))
+                .orElseThrow(() -> ResourceNotFoundException.of("Grade", gradeId));
     }
 
     @Override
-    public List<Grade> list() {
-        return grades.findAllOrderedByName();
+    public List<Grade> list(Long teacherId) {
+        return grades.findByTeacherIdOrderedByName(teacherId);
     }
 
-    private void requireNameAvailable(String name, Long currentId) {
-        grades.findByName(name).filter(g -> !g.getId().equals(currentId)).ifPresent(g -> {
+    private void requireNameAvailable(Long teacherId, String name, Long currentId) {
+        grades.findByTeacherIdAndName(teacherId, name).filter(g -> !g.getId().equals(currentId)).ifPresent(g -> {
             throw new ConflictException("GRADE_ALREADY_EXISTS", "A grade named '" + name + "' already exists");
         });
     }

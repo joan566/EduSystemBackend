@@ -28,7 +28,6 @@ import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
-import com.edusistem.core.shared.domain.outputports.OwnershipPort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
@@ -70,7 +69,6 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
     private final SpreadsheetWriterPort writer;
     private final ImportBatchRepositoryPort batches;
     private final StudentRepositoryPort students;
-    private final OwnershipPort ownership;
     private final OwnershipGuard guard;
     private final TeachingPeriodRepositoryPort teachingPeriods;
     private final ActivityRepositoryPort activities;
@@ -84,7 +82,7 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
 
     public ImportTeachingPeriodDataService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
                                            ImportBatchRepositoryPort batches, StudentRepositoryPort students,
-                                           OwnershipPort ownership, OwnershipGuard guard,
+                                           OwnershipGuard guard,
                                            TeachingPeriodRepositoryPort teachingPeriods, ActivityRepositoryPort activities,
                                            GradeActivityUseCase gradeActivity, AttendanceSessionRepositoryPort sessions,
                                            ManageAttendanceUseCase attendance, StudentImportApplier applier,
@@ -93,7 +91,6 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
         this.writer = writer;
         this.batches = batches;
         this.students = students;
-        this.ownership = ownership;
         this.guard = guard;
         this.teachingPeriods = teachingPeriods;
         this.activities = activities;
@@ -176,12 +173,12 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
                 failedKeys.add("Students#" + row.rowNumber());
                 continue;
             }
-            Long existingId = students.findByIdentificationNumber(identification).map(Student::getId).orElse(null);
-            boolean update = existingId != null && ownership.teachesStudent(teacherId, existingId);
-            valid.add(new StudentImportRow(row.rowNumber(), existingId, update, identification, null, firstName, lastName,
+            Long existingId = students.findByTeacherIdAndIdentificationNumber(teacherId, identification)
+                    .map(Student::getId).orElse(null);
+            valid.add(new StudentImportRow(row.rowNumber(), existingId, identification, null, firstName, lastName,
                     email, groupId));
         }
-        applier.apply(valid);
+        applier.apply(teacherId, valid);
         return sheet.rows().size();
     }
 

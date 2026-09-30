@@ -7,6 +7,8 @@ import com.edusistem.core.imports.infrastructure.repository.SpringDataImportBatc
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.infrastructure.adapter.PageMapper;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -35,5 +37,10 @@ public class ImportBatchRepositoryAdapter implements ImportBatchRepositoryPort {
     public PageResult<ImportBatch> findByUserId(Long userId, PageQuery page) {
         return PageMapper.toResult(repository.findByUserIdOrderByCreatedAtDescIdDesc(userId, PageMapper.pageable(page)),
                 mapper::toDomain);
+    }
+
+    @Override
+    public List<ImportBatch> findCompletedWithFilesBefore(LocalDateTime cutoff) {
+        return repository.findCompletedWithFilesBefore(cutoff).stream().map(mapper::toDomain).toList();
     }
 }
