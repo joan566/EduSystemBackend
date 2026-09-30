@@ -32,7 +32,8 @@ import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.domain.vo.PeriodWorkbookColumns;
-import com.edusistem.core.shared.domain.vo.TabularData;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary.SheetSpec;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.math.BigDecimal;
@@ -41,6 +42,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,8 +54,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Importación combinada de un teaching period: hojas Students, Grades y Attendance, todas opcionales. Las columnas
- * dinámicas de Grades/Attendance se reconocen por el id incrustado en su encabezado (ver {@link PeriodWorkbookColumns}),
+ * Importación combinada de un teaching period: hojas Estudiantes, Notas y Asistencia, todas opcionales (también se
+ * aceptan los nombres y encabezados en inglés de los archivos antiguos, ver {@link SpreadsheetVocabulary}). Las columnas
+ * dinámicas de Notas/Asistencia se reconocen por el id incrustado en su encabezado (ver {@link PeriodWorkbookColumns}),
  * generado por {@code GET /exports/teaching-periods/{id}/full}, que también sirve de plantilla. Cada fila se valida
  * antes de aplicarse: una fila o celda incorrecta no aborta el resto de la importación. Las notas y la asistencia se
  * registran a través de los mismos casos de uso que sus endpoints dedicados (respetan las mismas reglas de negocio:
@@ -111,7 +114,7 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
 
         String fileName = command.fileName() == null ? "teaching-period.xlsx" : command.fileName();
         if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx") || !looksLikeZip(command.content())) {
-            throw new InvalidRequestException("INVALID_FILE_TYPE", "Only Excel .xlsx files are supported");
+            throw new InvalidRequestException("INVALID_FILE_TYPE", ImportMessages.ONLY_XLSX);
         }
         ImportBatch batch = batches.save(ImportBatch.builder().userId(command.teacherId())
                 .fileName(fileName.length() > 255 ? fileName.substring(0, 255) : fileName)
@@ -142,31 +145,32 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
 
     private int applyStudents(Long teacherId, Long groupId, ParsedWorkbook workbook, List<ImportRowError> errors,
                               Set<String> failedKeys) {
-        Optional<ParsedSheet> sheetOpt = workbook.sheet("Students");
+        SheetSpec spec = SpreadsheetVocabulary.STUDENTS;
+        Optional<ParsedSheet> sheetOpt = workbook.sheet(spec);
         if (sheetOpt.isEmpty()) {
             return 0;
         }
         ParsedSheet sheet = sheetOpt.get();
-        requireColumn(sheet, "identification_number", "Students");
-        requireColumn(sheet, "first_name", "Students");
-        requireColumn(sheet, "last_name", "Students");
+        requireColumn(sheet, "identification_number", spec);
+        requireColumn(sheet, "first_name", spec);
+        requireColumn(sheet, "last_name", spec);
 
         List<StudentImportRow> valid = new ArrayList<>();
         Map<String, Integer> seen = new HashMap<>();
         for (SpreadsheetRow row : sheet.rows()) {
             int before = errors.size();
-            String identification = required(row, "identification_number", 50, errors, "Students");
-            String firstName = required(row, "first_name", 100, errors, "Students");
-            String lastName = required(row, "last_name", 100, errors, "Students");
+            String identification = required(row, "identification_number", 50, errors, spec);
+            String firstName = required(row, "first_name", 100, errors, spec);
+            String lastName = required(row, "last_name", 100, errors, spec);
             String email = row.get("email");
             if (email != null && (email.length() > 255 || !EMAIL.matcher(email).matches())) {
-                errors.add(new ImportRowError(row.rowNumber(), "Students:email", "Invalid e-mail address"));
+                errors.add(new ImportRowError(row.rowNumber(), spec.ref("email"), ImportMessages.INVALID_EMAIL));
             }
             if (identification != null) {
                 Integer first = seen.putIfAbsent(identification, row.rowNumber());
                 if (first != null) {
-                    errors.add(new ImportRowError(row.rowNumber(), "Students:identification_number",
-                            "Duplicated in the sheet (first seen in row " + first + ")"));
+                    errors.add(new ImportRowError(row.rowNumber(), spec.ref("identification_number"),
+                            ImportMessages.duplicatedInSheet(first)));
                 }
             }
             if (errors.size() > before) {
@@ -186,22 +190,22 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
 
     private int applyGrades(Long teacherId, Long teachingPeriodId, ParsedWorkbook workbook,
                             Map<String, Long> studentIdByIdentification, List<ImportRowError> errors, Set<String> failedKeys) {
-        Optional<ParsedSheet> sheetOpt = workbook.sheet("Grades");
+        SheetSpec spec = SpreadsheetVocabulary.GRADES;
+        Optional<ParsedSheet> sheetOpt = workbook.sheet(spec);
         if (sheetOpt.isEmpty()) {
             return 0;
         }
         ParsedSheet sheet = sheetOpt.get();
-        requireColumn(sheet, "identification_number", "Grades");
+        requireColumn(sheet, "identification_number", spec);
 
-        Map<String, ActivityView> activityByHeader = new HashMap<>();
-        for (ActivityView a : allActivities(teachingPeriodId)) {
-            activityByHeader.put(normalizeHeader(PeriodWorkbookColumns.activityHeader(a.name(), a.activityId(), a.maximumScore())), a);
-        }
+        Map<Long, ActivityView> activityById = allActivities(teachingPeriodId).stream()
+                .collect(Collectors.toMap(ActivityView::activityId, a -> a));
+        Map<String, ActivityView> activityByHeader = columnsById(sheet, activityById);
 
         Map<Long, List<ActivityCommands.GradeInput>> inputsByActivity = new HashMap<>();
         Set<String> seenIdentification = new HashSet<>();
         for (SpreadsheetRow row : sheet.rows()) {
-            Long studentId = resolveRosterStudent(row, "Grades", studentIdByIdentification, seenIdentification, errors, failedKeys);
+            Long studentId = resolveRosterStudent(row, spec, studentIdByIdentification, seenIdentification, errors, failedKeys);
             if (studentId == null) {
                 continue;
             }
@@ -216,13 +220,13 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
                 try {
                     grade = new BigDecimal(raw);
                 } catch (NumberFormatException e) {
-                    errors.add(new ImportRowError(row.rowNumber(), "Grades:" + activity.name(), "Must be a number"));
+                    errors.add(new ImportRowError(row.rowNumber(), spec.ref(activity.name()), ImportMessages.NOT_A_NUMBER));
                     rowFailed = true;
                     continue;
                 }
                 if (grade.signum() < 0 || grade.compareTo(activity.maximumScore()) > 0) {
-                    errors.add(new ImportRowError(row.rowNumber(), "Grades:" + activity.name(),
-                            "Must be between 0 and " + activity.maximumScore().stripTrailingZeros().toPlainString()));
+                    errors.add(new ImportRowError(row.rowNumber(), spec.ref(activity.name()),
+                            ImportMessages.between(activity.maximumScore())));
                     rowFailed = true;
                     continue;
                 }
@@ -238,7 +242,8 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
                 gradeActivity.recordGrades(new ActivityCommands.RecordGrades(teacherId, activityId, inputs));
             } catch (RuntimeException e) {
                 log.warn("Could not save grades for activity {}: {}", activityId, e.getMessage());
-                errors.add(new ImportRowError(0, "Grades:activity-" + activityId, "Could not save: " + e.getMessage()));
+                errors.add(new ImportRowError(0, spec.ref(activityById.get(activityId).name()),
+                        ImportMessages.couldNotSave(e.getMessage())));
             }
         });
         return sheet.rows().size();
@@ -248,22 +253,22 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
 
     private int applyAttendance(Long teacherId, Long teachingPeriodId, ParsedWorkbook workbook,
                                 Map<String, Long> studentIdByIdentification, List<ImportRowError> errors, Set<String> failedKeys) {
-        Optional<ParsedSheet> sheetOpt = workbook.sheet("Attendance");
+        SheetSpec spec = SpreadsheetVocabulary.ATTENDANCE;
+        Optional<ParsedSheet> sheetOpt = workbook.sheet(spec);
         if (sheetOpt.isEmpty()) {
             return 0;
         }
         ParsedSheet sheet = sheetOpt.get();
-        requireColumn(sheet, "identification_number", "Attendance");
+        requireColumn(sheet, "identification_number", spec);
 
-        Map<String, AttendanceSessionView> sessionByHeader = new HashMap<>();
-        for (AttendanceSessionView s : allSessions(teachingPeriodId)) {
-            sessionByHeader.put(normalizeHeader(PeriodWorkbookColumns.sessionHeader(s.sessionDate(), s.sessionId())), s);
-        }
+        Map<Long, AttendanceSessionView> sessionById = allSessions(teachingPeriodId).stream()
+                .collect(Collectors.toMap(AttendanceSessionView::sessionId, s -> s));
+        Map<String, AttendanceSessionView> sessionByHeader = columnsById(sheet, sessionById);
 
         Map<Long, List<AttendanceCommands.RecordInput>> inputsBySession = new HashMap<>();
         Set<String> seenIdentification = new HashSet<>();
         for (SpreadsheetRow row : sheet.rows()) {
-            Long studentId = resolveRosterStudent(row, "Attendance", studentIdByIdentification, seenIdentification, errors, failedKeys);
+            Long studentId = resolveRosterStudent(row, spec, studentIdByIdentification, seenIdentification, errors, failedKeys);
             if (studentId == null) {
                 continue;
             }
@@ -274,17 +279,15 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
                     continue;
                 }
                 AttendanceSessionView session = entry.getValue();
-                AttendanceStatus status;
-                try {
-                    status = AttendanceStatus.valueOf(raw.toUpperCase(Locale.ROOT));
-                } catch (IllegalArgumentException e) {
-                    errors.add(new ImportRowError(row.rowNumber(), "Attendance:" + session.sessionDate(),
-                            "Must be PRESENT, ABSENT or EXCUSED"));
+                Optional<AttendanceStatus> status = SpreadsheetVocabulary.attendanceStatusName(raw).map(AttendanceStatus::valueOf);
+                if (status.isEmpty()) {
+                    errors.add(new ImportRowError(row.rowNumber(), spec.ref(session.sessionDate().toString()),
+                            ImportMessages.INVALID_ATTENDANCE));
                     rowFailed = true;
                     continue;
                 }
                 inputsBySession.computeIfAbsent(session.sessionId(), k -> new ArrayList<>())
-                        .add(new AttendanceCommands.RecordInput(studentId, status, null));
+                        .add(new AttendanceCommands.RecordInput(studentId, status.get(), null));
             }
             if (rowFailed) {
                 failedKeys.add("Attendance#" + row.rowNumber());
@@ -295,30 +298,31 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
                 attendance.recordAttendance(new AttendanceCommands.RecordAttendance(teacherId, sessionId, inputs));
             } catch (RuntimeException e) {
                 log.warn("Could not save attendance for session {}: {}", sessionId, e.getMessage());
-                errors.add(new ImportRowError(0, "Attendance:session-" + sessionId, "Could not save: " + e.getMessage()));
+                errors.add(new ImportRowError(0, spec.ref(sessionById.get(sessionId).sessionDate().toString()),
+                        ImportMessages.couldNotSave(e.getMessage())));
             }
         });
         return sheet.rows().size();
     }
 
-    private Long resolveRosterStudent(SpreadsheetRow row, String sheetLabel, Map<String, Long> studentIdByIdentification,
+    private Long resolveRosterStudent(SpreadsheetRow row, SheetSpec spec, Map<String, Long> studentIdByIdentification,
                                       Set<String> seenIdentification, List<ImportRowError> errors, Set<String> failedKeys) {
         String identification = row.get("identification_number");
         if (identification == null) {
-            errors.add(new ImportRowError(row.rowNumber(), sheetLabel + ":identification_number", "Required"));
-            failedKeys.add(sheetLabel + "#" + row.rowNumber());
+            errors.add(new ImportRowError(row.rowNumber(), spec.ref("identification_number"), ImportMessages.REQUIRED));
+            failedKeys.add(spec.name() + "#" + row.rowNumber());
             return null;
         }
         if (!seenIdentification.add(identification)) {
-            errors.add(new ImportRowError(row.rowNumber(), sheetLabel + ":identification_number", "Duplicated in the sheet"));
-            failedKeys.add(sheetLabel + "#" + row.rowNumber());
+            errors.add(new ImportRowError(row.rowNumber(), spec.ref("identification_number"), ImportMessages.DUPLICATED_IN_SHEET));
+            failedKeys.add(spec.name() + "#" + row.rowNumber());
             return null;
         }
         Long studentId = studentIdByIdentification.get(identification);
         if (studentId == null) {
-            errors.add(new ImportRowError(row.rowNumber(), sheetLabel + ":identification_number",
-                    "No active student with this identification number in the group"));
-            failedKeys.add(sheetLabel + "#" + row.rowNumber());
+            errors.add(new ImportRowError(row.rowNumber(), spec.ref("identification_number"),
+                    "No hay un estudiante activo con este número de identificación en el grupo"));
+            failedKeys.add(spec.name() + "#" + row.rowNumber());
             return null;
         }
         return studentId;
@@ -348,27 +352,39 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
         return list;
     }
 
-    private static void requireColumn(ParsedSheet sheet, String column, String sheetLabel) {
+    /**
+     * Columnas dinámicas de la hoja (encabezado normalizado → actividad/sesión) según el id incrustado. Solo se tienen
+     * en cuenta los ids que pertenecen al teaching period; si dos columnas traen el mismo id, vale la primera.
+     */
+    private static <T> Map<String, T> columnsById(ParsedSheet sheet, Map<Long, T> byId) {
+        Map<String, T> byHeader = new LinkedHashMap<>();
+        Set<Long> used = new HashSet<>();
+        for (String header : sheet.headers()) {
+            PeriodWorkbookColumns.idFromHeader(header)
+                    .filter(byId::containsKey)
+                    .filter(used::add)
+                    .ifPresent(id -> byHeader.put(header, byId.get(id)));
+        }
+        return byHeader;
+    }
+
+    private static void requireColumn(ParsedSheet sheet, String column, SheetSpec spec) {
         if (!sheet.headers().contains(column)) {
-            throw new InvalidRequestException("MISSING_COLUMNS", "Sheet '" + sheetLabel + "' is missing required column: " + column);
+            throw new InvalidRequestException("MISSING_COLUMNS", ImportMessages.missingColumn(spec.label(), spec.header(column)));
         }
     }
 
-    private static String required(SpreadsheetRow row, String column, int maxLength, List<ImportRowError> errors, String sheetLabel) {
+    private static String required(SpreadsheetRow row, String column, int maxLength, List<ImportRowError> errors, SheetSpec spec) {
         String value = row.get(column);
         if (value == null) {
-            errors.add(new ImportRowError(row.rowNumber(), sheetLabel + ":" + column, "Required"));
+            errors.add(new ImportRowError(row.rowNumber(), spec.ref(column), ImportMessages.REQUIRED));
             return null;
         }
         if (value.length() > maxLength) {
-            errors.add(new ImportRowError(row.rowNumber(), sheetLabel + ":" + column, "Must have at most " + maxLength + " characters"));
+            errors.add(new ImportRowError(row.rowNumber(), spec.ref(column), ImportMessages.maxLength(maxLength)));
             return null;
         }
         return value;
-    }
-
-    private static String normalizeHeader(String header) {
-        return header.trim().toLowerCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
     }
 
     private ImportResult finish(ImportBatch batch, Long userId, int total, int successful, List<ImportRowError> errors,
@@ -383,7 +399,7 @@ public class ImportTeachingPeriodDataService implements ImportTeachingPeriodData
             List<List<Object>> lines = errors.stream()
                     .map(e -> List.<Object>of(e.rowNumber(), e.column() == null ? "" : e.column(), e.message())).toList();
             batch.setErrorReportPath(storage.store("imports/errors", "import-errors.xlsx",
-                    writer.write(new TabularData("Errors", List.of("row", "column", "error"), lines))));
+                    writer.write(SpreadsheetVocabulary.ERRORS.table(List.of("row", "column", "error"), lines))));
         }
         ImportBatch saved = batches.save(batch);
         audit.success(userId, AuditAction.IMPORT, "ImportBatch", saved.getId(),

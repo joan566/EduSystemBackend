@@ -40,11 +40,24 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
     void templateHasNineSheets() {
         MvcResult result = download(newTeacher(), "/api/v1/imports/school-setup/template");
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("Content-Disposition")).contains("plantilla-configuracion-escolar.xlsx");
         byte[] content = result.getResponse().getContentAsByteArray();
-        for (String name : List.of("AcademicPeriods", "AcademicGrades", "Subjects", "Groups", "Classes", "Students",
-                "Activities", "ActivityGrades", "Attendance")) {
+        for (String name : List.of("Periodos", "Grados", "Asignaturas", "Grupos", "Clases", "Estudiantes",
+                "Actividades", "Notas de actividades", "Asistencia")) {
             assertThat(sheet(content, name)).as(name).isNotNull();
         }
+        assertThat(sheet(content, "Asistencia").getRow(1).getCell(7).getStringCellValue()).isEqualTo("Presente");
+    }
+
+    /** La plantilla en español, tal como se descarga, se puede volver a subir y crea todo sin errores. */
+    @Test
+    void templateCanBeUploadedAsIs() {
+        Teacher t = newTeacher();
+        byte[] template = download(t, "/api/v1/imports/school-setup/template").getResponse().getContentAsByteArray();
+        JsonNode result = uploadSchoolSetup(t, template, 201);
+        assertThat(result.get("errors")).isEmpty();
+        assertThat(result.get("failedRows").asInt()).isZero();
+        assertThat(result.get("totalRows").asInt()).isEqualTo(9);
     }
 
     @Test
@@ -151,7 +164,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         assertThat(result.get("totalRows").asInt()).isEqualTo(3); // 1 AcademicGrades + 2 Groups
         assertThat(result.get("failedRows").asInt()).isEqualTo(1);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(2);
-        assertThat(result.get("errors").toString()).contains("does not exist");
+        assertThat(result.get("errors").toString()).contains("Grupos:Grado").contains("no existe");
 
         long gradeId = findByName(t, "/api/v1/grades", "name", gradeName);
         JsonNode groups = get(t, "/api/v1/groups?gradeId=" + gradeId + "&academicYear=" + YEAR, 200).get("content");

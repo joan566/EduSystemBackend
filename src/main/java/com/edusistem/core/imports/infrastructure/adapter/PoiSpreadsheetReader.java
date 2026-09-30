@@ -5,6 +5,7 @@ import com.edusistem.core.imports.domain.vo.ParsedSheet;
 import com.edusistem.core.imports.domain.vo.ParsedWorkbook;
 import com.edusistem.core.imports.domain.vo.SpreadsheetRow;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -32,18 +33,18 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
     public ParsedSheet read(byte[] content) {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
             if (workbook.getNumberOfSheets() == 0) {
-                throw new InvalidRequestException("EMPTY_FILE", "The Excel file has no sheets");
+                throw new InvalidRequestException("EMPTY_FILE", "El archivo de Excel no tiene hojas");
             }
             ParsedSheet sheet = parseSheet(workbook.getSheetAt(0));
             if (sheet.headers().isEmpty()) {
-                throw new InvalidRequestException("EMPTY_FILE", "The Excel file is empty");
+                throw new InvalidRequestException("EMPTY_FILE", "El archivo de Excel está vacío");
             }
             return sheet;
         } catch (IOException | RuntimeException e) {
             if (e instanceof InvalidRequestException invalid) {
                 throw invalid;
             }
-            throw new InvalidRequestException("INVALID_EXCEL", "The file is not a readable Excel (.xlsx) workbook");
+            throw new InvalidRequestException("INVALID_EXCEL", "El archivo no es un Excel (.xlsx) válido o no se pudo leer");
         }
     }
 
@@ -51,7 +52,7 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
     public ParsedWorkbook readAll(byte[] content) {
         try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(content))) {
             if (workbook.getNumberOfSheets() == 0) {
-                throw new InvalidRequestException("EMPTY_FILE", "The Excel file has no sheets");
+                throw new InvalidRequestException("EMPTY_FILE", "El archivo de Excel no tiene hojas");
             }
             Map<String, ParsedSheet> sheets = new LinkedHashMap<>();
             for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
@@ -63,7 +64,7 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
             if (e instanceof InvalidRequestException invalid) {
                 throw invalid;
             }
-            throw new InvalidRequestException("INVALID_EXCEL", "The file is not a readable Excel (.xlsx) workbook");
+            throw new InvalidRequestException("INVALID_EXCEL", "El archivo no es un Excel (.xlsx) válido o no se pudo leer");
         }
     }
 
@@ -75,7 +76,7 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
         }
         List<String> headers = new ArrayList<>();
         for (int c = 0; c < headerRow.getLastCellNum(); c++) {
-            headers.add(normalizeHeader(text(headerRow.getCell(c))));
+            headers.add(SpreadsheetVocabulary.normalize(text(headerRow.getCell(c))));
         }
         List<SpreadsheetRow> rows = new ArrayList<>();
         for (int r = sheet.getFirstRowNum() + 1; r <= sheet.getLastRowNum(); r++) {
@@ -110,9 +111,5 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
             return new BigDecimal(String.valueOf(cell.getNumericCellValue())).stripTrailingZeros().toPlainString();
         }
         return formatter.formatCellValue(cell).trim();
-    }
-
-    private static String normalizeHeader(String header) {
-        return header.trim().toLowerCase(Locale.ROOT).replaceAll("[\\s-]+", "_");
     }
 }

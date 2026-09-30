@@ -30,6 +30,7 @@ import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.domain.vo.PeriodWorkbookColumns;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import com.edusistem.core.shared.domain.vo.TabularData;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
@@ -44,7 +45,8 @@ import java.util.stream.Collectors;
 
 /**
  * Exporta a Excel. Todo dato se obtiene a través del contexto académico del profesor autenticado: nunca se exporta
- * información de un teaching period o grupo que no le pertenece.
+ * información de un teaching period o grupo que no le pertenece. Hojas, encabezados y valores van en español
+ * ({@link SpreadsheetVocabulary}); las claves canónicas en inglés son solo internas.
  */
 public class ExportService implements ExportUseCase {
 
@@ -102,11 +104,11 @@ public class ExportService implements ExportUseCase {
         }
         List<List<Object>> rows = list.stream().map(s -> List.<Object>of(s.getStudentCode(),
                 nullToEmpty(s.getIdentificationNumber()), s.getFirstName(), s.getLastName(), nullToEmpty(s.getEmail()))).toList();
-        byte[] content = writer.write(new TabularData("Students",
+        byte[] content = writer.write(SpreadsheetVocabulary.STUDENTS.table(
                 List.of("student_code", "identification_number", "first_name", "last_name", "email"), rows));
         audit.success(teacherId, AuditAction.EXPORT, AuditTarget.inTeachingPeriod("Students", teachingPeriodId,
                 teachingPeriodId, null), list.size() + " students");
-        return new ExportedFile("students.xlsx", content);
+        return new ExportedFile("estudiantes.xlsx", content);
     }
 
     @Override
@@ -119,7 +121,7 @@ public class ExportService implements ExportUseCase {
         Map<Long, BigDecimal> periodGradeByStudent = periodGradesOrEmpty(teacherId, teachingPeriodId);
 
         List<String> headers = new ArrayList<>(List.of("student_code", "identification_number", "last_name", "first_name"));
-        evals.forEach(e -> headers.add(e.getName() + " (max " + e.getMaximumScore().stripTrailingZeros().toPlainString() + ")"));
+        evals.forEach(e -> headers.add(PeriodWorkbookColumns.reportActivityHeader(e.getName(), e.getMaximumScore())));
         boolean withPeriodGrade = !periodGradeByStudent.isEmpty();
         if (withPeriodGrade) {
             headers.add("period_grade");
@@ -137,9 +139,9 @@ public class ExportService implements ExportUseCase {
             }
             rows.add(row);
         }
-        byte[] content = writer.write(new TabularData("Grades", headers, rows));
+        byte[] content = writer.write(SpreadsheetVocabulary.GRADES.table(headers, rows));
         audit.success(teacherId, AuditAction.EXPORT, target("Grades", period), roster.size() + " students");
-        return new ExportedFile("grades-teaching-period-" + teachingPeriodId + ".xlsx", content);
+        return new ExportedFile("notas-periodo-" + teachingPeriodId + ".xlsx", content);
     }
 
     @Override
@@ -172,7 +174,7 @@ public class ExportService implements ExportUseCase {
             int excused = 0;
             for (AttendanceSessionView s : allSessions) {
                 AttendanceStatus status = statusBySession.get(s.sessionId()).get(student.getId());
-                row.add(status == null ? null : status.name());
+                row.add(status == null ? null : SpreadsheetVocabulary.attendanceLabel(status.name()));
                 if (status == AttendanceStatus.PRESENT) {
                     present++;
                 } else if (status == AttendanceStatus.ABSENT) {
@@ -186,9 +188,9 @@ public class ExportService implements ExportUseCase {
                     .setScale(1, RoundingMode.HALF_UP));
             rows.add(row);
         }
-        byte[] content = writer.write(new TabularData("Attendance", headers, rows));
+        byte[] content = writer.write(SpreadsheetVocabulary.ATTENDANCE.table(headers, rows));
         audit.success(teacherId, AuditAction.EXPORT, target("Attendance", period), allSessions.size() + " sessions");
-        return new ExportedFile("attendance-teaching-period-" + teachingPeriodId + ".xlsx", content);
+        return new ExportedFile("asistencia-periodo-" + teachingPeriodId + ".xlsx", content);
     }
 
     @Override
@@ -201,13 +203,13 @@ public class ExportService implements ExportUseCase {
         byte[] content = writer.writeWorkbook(List.of(fullStudentsSheet(roster), fullGradesSheet(teacherId, roster, activityList),
                 fullAttendanceSheet(roster, sessionList)));
         audit.success(teacherId, AuditAction.EXPORT, target("TeachingPeriodFull", periodView), roster.size() + " students");
-        return new ExportedFile("teaching-period-" + teachingPeriodId + "-full.xlsx", content);
+        return new ExportedFile("periodo-" + teachingPeriodId + "-completo.xlsx", content);
     }
 
     private TabularData fullStudentsSheet(List<Student> roster) {
         List<List<Object>> rows = roster.stream().map(s -> List.<Object>of(nullToEmpty(s.getIdentificationNumber()),
                 s.getFirstName(), s.getLastName(), nullToEmpty(s.getEmail()))).toList();
-        return new TabularData("Students", List.of("identification_number", "first_name", "last_name", "email"), rows);
+        return SpreadsheetVocabulary.STUDENTS.table(List.of("identification_number", "first_name", "last_name", "email"), rows);
     }
 
     private TabularData fullGradesSheet(Long teacherId, List<Student> roster, List<ActivityView> activityList) {
@@ -225,7 +227,7 @@ public class ExportService implements ExportUseCase {
             activityList.forEach(a -> row.add(gradeByActivityThenStudent.get(a.activityId()).get(s.getId())));
             rows.add(row);
         }
-        return new TabularData("Grades", headers, rows);
+        return SpreadsheetVocabulary.GRADES.table(headers, rows);
     }
 
     private TabularData fullAttendanceSheet(List<Student> roster, List<AttendanceSessionView> sessionList) {
@@ -242,11 +244,11 @@ public class ExportService implements ExportUseCase {
                     student.getFirstName()));
             for (AttendanceSessionView s : sessionList) {
                 AttendanceStatus status = statusBySession.get(s.sessionId()).get(student.getId());
-                row.add(status == null ? null : status.name());
+                row.add(status == null ? null : SpreadsheetVocabulary.attendanceLabel(status.name()));
             }
             rows.add(row);
         }
-        return new TabularData("Attendance", headers, rows);
+        return SpreadsheetVocabulary.ATTENDANCE.table(headers, rows);
     }
 
     private List<ActivityView> allActivities(Long teachingPeriodId) {

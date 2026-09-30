@@ -97,7 +97,7 @@ lanzamiento van en migraciones nuevas (`V10__...`); nunca se editan las ya publi
 | Submissions | `POST /exams/{id}/submissions` (multipart `image`, `studentId?`, `replace?`) · `GET /exams/{id}/submissions` · `GET …/{submissionId}` · `GET …/{submissionId}/image` (foto original) · `PUT …/{submissionId}/answers/{questionNumber}` · `PUT …/{submissionId}/final-grade` |
 | Actividades | CRUD `/activities` · `GET/PUT /activities/{id}/grades` · `PUT /activities/{id}/grades/{studentId}` |
 | Asistencia | `/attendance-sessions` (POST, GET, GET id, DELETE) · `PUT /attendance-sessions/{id}/records` |
-| Excel | `POST /imports/students` · `GET /imports/students/template` · `GET /imports`, `/imports/{id}`, `/imports/{id}/error-report` · `GET /exports/students`, `/exports/grades`, `/exports/attendance` · `GET /exports/teaching-periods/{id}/full` (Students+Grades+Attendance en un solo Excel; también sirve de plantilla) · `POST /imports/teaching-periods/{id}` (reimporta ese mismo Excel) |
+| Excel | `POST /imports/students` · `GET /imports/students/template` · `GET /imports`, `/imports/{id}`, `/imports/{id}/error-report` · `GET /exports/students`, `/exports/grades`, `/exports/attendance` · `GET /exports/teaching-periods/{id}/full` (Estudiantes+Notas+Asistencia en un solo Excel; también sirve de plantilla) · `POST /imports/teaching-periods/{id}` (reimporta ese mismo Excel). Hojas, encabezados y valores de los Excel van en español; al importar también se aceptan los nombres en inglés de archivos antiguos |
 | Auditoría | `GET /audit-logs` |
 
 Listas paginadas: `?page=0&size=20` (máx. 100) → `{content, page, size, totalElements, totalPages}`.

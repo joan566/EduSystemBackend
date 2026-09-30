@@ -53,12 +53,14 @@ public class ImportController {
     @PostMapping(value = "/students", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Importa estudiantes desde un Excel (.xlsx)",
-            description = "Columnas: identification_number, first_name, last_name, email, grade, group "
-                    + "(opcionales: academic_year, student_code). Las filas inválidas no detienen la importación.")
+            description = "Columnas: Número de identificación, Nombres, Apellidos, Correo electrónico, Grado, Grupo "
+                    + "(opcionales: Año lectivo, Código). También se aceptan los encabezados en inglés de las "
+                    + "plantillas antiguas (identification_number, first_name…). Las filas inválidas no detienen la "
+                    + "importación.")
     public ImportResultResponse importStudents(@AuthenticationPrincipal AuthenticatedUser user,
                                                @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
-            throw new InvalidRequestException("EMPTY_FILE", "The uploaded file is empty");
+            throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
         return ImportResultResponse.from(importStudents.importStudents(
                 new ImportCommands.ImportStudents(user.id(), file.getOriginalFilename(), file.getBytes())));
@@ -67,21 +69,24 @@ public class ImportController {
     @GetMapping("/students/template")
     @Operation(summary = "Descarga la plantilla Excel para importar estudiantes")
     public ResponseEntity<byte[]> template() {
-        return download(importStudents.template(), "students-template.xlsx");
+        return download(importStudents.template(), "plantilla-estudiantes.xlsx");
     }
 
     @PostMapping(value = "/teaching-periods/{teachingPeriodId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Importa estudiantes, notas de actividades y asistencia de un teaching period desde un Excel combinado",
-            description = "Hojas opcionales: Students (identification_number, first_name, last_name, email), Grades "
-                    + "(identification_number + una columna por actividad) y Attendance (identification_number + una "
-                    + "columna por sesión). GET /exports/teaching-periods/{teachingPeriodId}/full genera el archivo "
-                    + "(con los datos actuales) listo para editar y volver a subir.")
+            description = "Hojas opcionales: Estudiantes (Número de identificación, Nombres, Apellidos, Correo "
+                    + "electrónico), Notas (Número de identificación + una columna por actividad) y Asistencia (Número "
+                    + "de identificación + una columna por sesión, con Presente/Ausente/Excusado). Las columnas "
+                    + "dinámicas se reconocen por el #id de su encabezado. También se aceptan los nombres en inglés de "
+                    + "los archivos antiguos (Students/Grades/Attendance, PRESENT/ABSENT/EXCUSED). "
+                    + "GET /exports/teaching-periods/{teachingPeriodId}/full genera el archivo (con los datos actuales) "
+                    + "listo para editar y volver a subir.")
     public ImportResultResponse importTeachingPeriodData(@AuthenticationPrincipal AuthenticatedUser user,
                                                          @PathVariable Long teachingPeriodId,
                                                          @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
-            throw new InvalidRequestException("EMPTY_FILE", "The uploaded file is empty");
+            throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
         return ImportResultResponse.from(importTeachingPeriodData.importData(new ImportCommands.ImportTeachingPeriodData(
                 user.id(), teachingPeriodId, file.getOriginalFilename(), file.getBytes())));
@@ -89,11 +94,12 @@ public class ImportController {
 
     @GetMapping("/school-setup/template")
     @Operation(summary = "Descarga la plantilla Excel completa (9 hojas) para importar toda la configuración de un profesor",
-            description = "Hojas opcionales: AcademicPeriods, AcademicGrades, Subjects, Groups, Classes, Students, "
-                    + "Activities, ActivityGrades y Attendance. Se procesan en ese orden: cada hoja referencia sus "
-                    + "dependencias por nombre (no por id) y se crean solo si aún no existen.")
+            description = "Hojas opcionales: Periodos, Grados, Asignaturas, Grupos, Clases, Estudiantes, Actividades, "
+                    + "Notas de actividades y Asistencia (también se aceptan los nombres en inglés de las plantillas "
+                    + "antiguas). Se procesan en ese orden: cada hoja referencia sus dependencias por nombre (no por "
+                    + "id) y se crean solo si aún no existen.")
     public ResponseEntity<byte[]> schoolSetupTemplate() {
-        return download(importSchoolSetup.template(), "school-setup-template.xlsx");
+        return download(importSchoolSetup.template(), "plantilla-configuracion-escolar.xlsx");
     }
 
     @PostMapping(value = "/school-setup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -105,7 +111,7 @@ public class ImportController {
     public ImportResultResponse importSchoolSetup(@AuthenticationPrincipal AuthenticatedUser user,
                                                   @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
-            throw new InvalidRequestException("EMPTY_FILE", "The uploaded file is empty");
+            throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
         return ImportResultResponse.from(importSchoolSetup.importData(
                 new ImportCommands.ImportSchoolSetup(user.id(), file.getOriginalFilename(), file.getBytes())));
@@ -128,7 +134,7 @@ public class ImportController {
     @GetMapping("/{id}/error-report")
     @Operation(summary = "Descarga el reporte de errores (.xlsx) de una importación")
     public ResponseEntity<byte[]> errorReport(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
-        return download(queryImports.errorReport(user.id(), id), "import-" + id + "-errors.xlsx");
+        return download(queryImports.errorReport(user.id(), id), "importacion-" + id + "-errores.xlsx");
     }
 
     private static ResponseEntity<byte[]> download(byte[] content, String fileName) {

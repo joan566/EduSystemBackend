@@ -14,7 +14,7 @@ public interface ExportUseCase {
     ExportedFile attendance(Long teacherId, Long teachingPeriodId);
 
     /**
-     * Un solo .xlsx con 3 hojas (Students, Grades, Attendance) del teaching period: estudiantes matriculados, notas de
+     * Un solo .xlsx con 3 hojas (Estudiantes, Notas, Asistencia) del teaching period: estudiantes matriculados, notas de
      * actividades y asistencia. También sirve como plantilla para {@code POST /imports/teaching-periods/{id}}.
      */
     ExportedFile full(Long teacherId, Long teachingPeriodId);

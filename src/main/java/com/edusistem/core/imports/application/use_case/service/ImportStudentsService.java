@@ -18,7 +18,8 @@ import com.edusistem.core.imports.domain.vo.SpreadsheetRow;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
-import com.edusistem.core.shared.domain.vo.TabularData;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
+import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary.SheetSpec;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.time.Clock;
@@ -46,6 +47,16 @@ public class ImportStudentsService implements ImportStudentsUseCase {
     static final List<String> REQUIRED_COLUMNS = List.of("identification_number", "first_name", "last_name", "grade", "group");
     static final List<String> TEMPLATE_COLUMNS = List.of("identification_number", "first_name", "last_name", "email",
             "grade", "group", "academic_year");
+    /** Encabezados en español; al leer también se aceptan las claves en inglés de las plantillas antiguas. */
+    static final SheetSpec SHEET = new SheetSpec("Students", "Estudiantes", Map.of(
+            "identification_number", "Número de identificación",
+            "student_code", "Código",
+            "first_name", "Nombres",
+            "last_name", "Apellidos",
+            "email", "Correo electrónico",
+            "grade", "Grado",
+            "group", "Grupo",
+            "academic_year", "Año lectivo"));
     private static final int MAX_ROWS = 5000;
     private static final int MAX_RETURNED_ERRORS = 500;
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
@@ -82,17 +93,17 @@ public class ImportStudentsService implements ImportStudentsUseCase {
     public ImportResult importStudents(ImportCommands.ImportStudents command) {
         String fileName = command.fileName() == null ? "students.xlsx" : command.fileName();
         if (!fileName.toLowerCase(Locale.ROOT).endsWith(".xlsx") || !looksLikeZip(command.content())) {
-            throw new InvalidRequestException("INVALID_FILE_TYPE", "Only Excel .xlsx files are supported");
+            throw new InvalidRequestException("INVALID_FILE_TYPE", ImportMessages.ONLY_XLSX);
         }
         ImportBatch batch = batches.save(ImportBatch.builder().userId(command.teacherId())
                 .fileName(fileName.length() > 255 ? fileName.substring(0, 255) : fileName)
                 .filePath(storage.store("imports", fileName, command.content()))
                 .status(ImportStatus.PROCESSING).build());
         try {
-            ParsedSheet sheet = reader.read(command.content());
+            ParsedSheet sheet = reader.read(command.content()).canonicalize(SHEET);
             requireColumns(sheet);
             if (sheet.rows().size() > MAX_ROWS) {
-                throw new InvalidRequestException("TOO_MANY_ROWS", "The file has more than " + MAX_ROWS + " rows");
+                throw new InvalidRequestException("TOO_MANY_ROWS", ImportMessages.tooManyRows(MAX_ROWS));
             }
             List<ImportRowError> errors = new ArrayList<>();
             List<StudentImportRow> valid = validate(command.teacherId(), sheet.rows(), errors);
@@ -106,7 +117,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
 
     @Override
     public byte[] template() {
-        return writer.write(new TabularData("Students", TEMPLATE_COLUMNS, List.of(
+        return writer.write(SHEET.table(TEMPLATE_COLUMNS, List.of(
                 List.<Object>of("1001234567", "Ana", "Pérez", "ana.perez@example.com", "10°", "A", 2026))));
     }
 
@@ -116,7 +127,8 @@ public class ImportStudentsService implements ImportStudentsUseCase {
         List<String> missing = REQUIRED_COLUMNS.stream().filter(c -> !sheet.headers().contains(c)).toList();
         if (!missing.isEmpty()) {
             throw new InvalidRequestException("MISSING_COLUMNS",
-                    "Missing required columns: " + String.join(", ", missing) + ". Expected: " + String.join(", ", TEMPLATE_COLUMNS));
+                    "Faltan columnas obligatorias: " + String.join(", ", SHEET.headers(missing))
+                            + ". Columnas esperadas: " + String.join(", ", SHEET.headers(TEMPLATE_COLUMNS)));
         }
     }
 
@@ -137,10 +149,10 @@ public class ImportStudentsService implements ImportStudentsUseCase {
             String email = row.get("email");
             String code = row.get("student_code");
             if (email != null && (email.length() > 255 || !EMAIL.matcher(email).matches())) {
-                errors.add(new ImportRowError(row.rowNumber(), "email", "Invalid e-mail address"));
+                errors.add(new ImportRowError(row.rowNumber(), SHEET.header("email"), ImportMessages.INVALID_EMAIL));
             }
             if (code != null && code.length() > 50) {
-                errors.add(new ImportRowError(row.rowNumber(), "student_code", "Must have at most 50 characters"));
+                errors.add(new ImportRowError(row.rowNumber(), SHEET.header("student_code"), ImportMessages.maxLength(50)));
             }
             int year = currentYear;
             String yearText = row.get("academic_year");
@@ -151,21 +163,21 @@ public class ImportStudentsService implements ImportStudentsUseCase {
                         throw new NumberFormatException();
                     }
                 } catch (NumberFormatException e) {
-                    errors.add(new ImportRowError(row.rowNumber(), "academic_year", "Must be an integer year between 2000 and 2200"));
+                    errors.add(new ImportRowError(row.rowNumber(), SHEET.header("academic_year"), ImportMessages.INVALID_YEAR));
                 }
             }
             if (identification != null) {
                 Integer first = seenIdentifications.putIfAbsent(identification, row.rowNumber());
                 if (first != null) {
-                    errors.add(new ImportRowError(row.rowNumber(), "identification_number",
-                            "Duplicated in the file (first seen in row " + first + ")"));
+                    errors.add(new ImportRowError(row.rowNumber(), SHEET.header("identification_number"),
+                            ImportMessages.duplicatedInFile(first)));
                 }
             }
             if (code != null) {
                 Integer first = seenCodes.putIfAbsent(code, row.rowNumber());
                 if (first != null) {
-                    errors.add(new ImportRowError(row.rowNumber(), "student_code",
-                            "Duplicated in the file (first seen in row " + first + ")"));
+                    errors.add(new ImportRowError(row.rowNumber(), SHEET.header("student_code"),
+                            ImportMessages.duplicatedInFile(first)));
                 }
             }
             Long groupId = null;
@@ -188,9 +200,9 @@ public class ImportStudentsService implements ImportStudentsUseCase {
                 k -> groups.findByGradeNameAndNameAndAcademicYear(teacherId, gradeName, groupName, year).map(Group::getId));
         if (groupId.isEmpty()) {
             boolean gradeExists = grades.findByTeacherIdAndName(teacherId, gradeName).isPresent();
-            errors.add(new ImportRowError(row.rowNumber(), gradeExists ? "group" : "grade", gradeExists
-                    ? "Group '" + groupName + "' does not exist in grade '" + gradeName + "' for " + year
-                    : "Grade '" + gradeName + "' does not exist"));
+            errors.add(new ImportRowError(row.rowNumber(), SHEET.header(gradeExists ? "group" : "grade"), gradeExists
+                    ? "El grupo '" + groupName + "' no existe en el grado '" + gradeName + "' para " + year
+                    : "El grado '" + gradeName + "' no existe"));
             return null;
         }
         return groupId.get();
@@ -203,12 +215,12 @@ public class ImportStudentsService implements ImportStudentsUseCase {
         Optional<Student> byIdentification = students.findByTeacherIdAndIdentificationNumber(teacherId, identification);
         Optional<Student> byCode = code == null ? Optional.empty() : students.findByTeacherIdAndStudentCode(teacherId, code);
         if (byIdentification.isPresent() && byCode.isPresent() && !byIdentification.get().getId().equals(byCode.get().getId())) {
-            errors.add(new ImportRowError(row.rowNumber(), "student_code",
-                    "The student code belongs to a different student than the identification number"));
+            errors.add(new ImportRowError(row.rowNumber(), SHEET.header("student_code"),
+                    "El código pertenece a un estudiante distinto al del número de identificación"));
             return Optional.empty();
         }
         if (byIdentification.isEmpty() && byCode.isPresent()) {
-            errors.add(new ImportRowError(row.rowNumber(), "student_code", "The student code is already used by another student"));
+            errors.add(new ImportRowError(row.rowNumber(), SHEET.header("student_code"), "El código ya lo usa otro estudiante"));
             return Optional.empty();
         }
         Long existingId = byIdentification.map(Student::getId).orElse(null);
@@ -219,11 +231,11 @@ public class ImportStudentsService implements ImportStudentsUseCase {
     private static String required(SpreadsheetRow row, String column, int maxLength, List<ImportRowError> errors) {
         String value = row.get(column);
         if (value == null) {
-            errors.add(new ImportRowError(row.rowNumber(), column, "Required"));
+            errors.add(new ImportRowError(row.rowNumber(), SHEET.header(column), ImportMessages.REQUIRED));
             return null;
         }
         if (value.length() > maxLength) {
-            errors.add(new ImportRowError(row.rowNumber(), column, "Must have at most " + maxLength + " characters"));
+            errors.add(new ImportRowError(row.rowNumber(), SHEET.header(column), ImportMessages.maxLength(maxLength)));
             return null;
         }
         return value;
@@ -243,7 +255,7 @@ public class ImportStudentsService implements ImportStudentsUseCase {
             List<List<Object>> lines = errors.stream()
                     .map(e -> List.<Object>of(e.rowNumber(), e.column() == null ? "" : e.column(), e.message())).toList();
             batch.setErrorReportPath(storage.store("imports/errors", "import-errors.xlsx",
-                    writer.write(new TabularData("Errors", List.of("row", "column", "error"), lines))));
+                    writer.write(SpreadsheetVocabulary.ERRORS.table(List.of("row", "column", "error"), lines))));
         }
         ImportBatch saved = batches.save(batch);
         audit.success(userId, AuditAction.IMPORT, "ImportBatch", saved.getId(),

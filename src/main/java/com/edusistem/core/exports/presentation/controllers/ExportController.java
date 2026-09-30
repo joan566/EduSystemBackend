@@ -51,7 +51,7 @@ public class ExportController {
 
     @GetMapping("/teaching-periods/{teachingPeriodId}/full")
     @Operation(summary = "Exporta estudiantes, notas de actividades y asistencia de un teaching period en un solo Excel",
-            description = "3 hojas: Students, Grades y Attendance. También sirve como plantilla para "
+            description = "3 hojas: Estudiantes, Notas y Asistencia. También sirve como plantilla para "
                     + "POST /imports/teaching-periods/{teachingPeriodId}: se descarga, se edita y se vuelve a subir.")
     public ResponseEntity<byte[]> full(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long teachingPeriodId) {
         return xlsx(exports.full(user.id(), teachingPeriodId));

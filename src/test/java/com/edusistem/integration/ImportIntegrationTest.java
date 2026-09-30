@@ -71,7 +71,7 @@ class ImportIntegrationTest extends IntegrationTest {
         JsonNode error = importFile(t, xlsx(List.of("identification_number", "first_name", "last_name"),
                 List.of(List.of("1", "A", "B"))), "students.xlsx", 400);
         assertError(error, 400, "MISSING_COLUMNS");
-        assertThat(error.get("message").asText()).contains("grade").contains("group");
+        assertThat(error.get("message").asText()).contains("Grado").contains("Grupo");
         assertThat(jdbc.queryForObject("select status from import_batches where user_id = ? order by id desc limit 1",
                 String.class, t.id())).isEqualTo("FAILED");
     }
@@ -105,15 +105,18 @@ class ImportIntegrationTest extends IntegrationTest {
         result.get("errors").forEach(e -> failedRowNumbers.add(e.get("row").asInt()));
         assertThat(failedRowNumbers).containsExactlyInAnyOrder(3, 4, 5, 6, 8, 9);
         String errors = result.get("errors").toString();
-        assertThat(errors).contains("first_name").contains("email").contains("Grade '99°' does not exist")
-                .contains("Group 'ZZZ'").contains("Duplicated in the file").contains("academic_year");
+        assertThat(errors).contains("Nombres").contains("Correo electrónico").contains("El grado '99°' no existe")
+                .contains("El grupo 'ZZZ'").contains("Duplicado en el archivo").contains("Año lectivo");
 
         assertThat(get(t, "/api/v1/students?groupId=" + c.groupId(), 200).get("totalElements").asInt()).isEqualTo(2);
 
         // reporte de errores descargable en Excel
         MvcResult report = download(t, "/api/v1/imports/" + result.get("id").asLong() + "/error-report");
         assertThat(report.getResponse().getStatus()).isEqualTo(200);
+        assertThat(report.getResponse().getHeader("Content-Disposition")).contains("errores.xlsx");
         Sheet sheet = firstSheet(report.getResponse().getContentAsByteArray());
+        assertThat(sheet.getSheetName()).isEqualTo("Errores");
+        assertThat(sheet.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Fila");
         assertThat(sheet.getLastRowNum()).isEqualTo(6); // encabezado + 6 errores
     }
 
@@ -155,7 +158,7 @@ class ImportIntegrationTest extends IntegrationTest {
         second.add(code);
         JsonNode result = importFile(t, xlsx(headers, List.of(first, second)), "students.xlsx", 201);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(1);
-        assertThat(result.get("errors").toString()).contains("student_code");
+        assertThat(result.get("errors").toString()).contains("Código");
         assertThat(jdbc.queryForObject("select count(*) from students where student_code = ?", Integer.class, code)).isEqualTo(1);
     }
 
@@ -168,7 +171,7 @@ class ImportIntegrationTest extends IntegrationTest {
         assertThat(result.get("successfulRows").asInt()).isZero();
         assertThat(result.get("status").asText()).isEqualTo("FAILED");
         // los grados y grupos de A no existen para B
-        assertThat(result.get("errors").toString()).contains("does not exist");
+        assertThat(result.get("errors").toString()).contains("no existe");
         assertThat(get(a, "/api/v1/students?groupId=" + ca.groupId(), 200).get("totalElements").asInt()).isZero();
     }
 
@@ -217,6 +220,26 @@ class ImportIntegrationTest extends IntegrationTest {
         Sheet sheet = firstSheet(result.getResponse().getContentAsByteArray());
         List<String> headers = new ArrayList<>();
         sheet.getRow(0).forEach(cell -> headers.add(cell.getStringCellValue()));
-        assertThat(headers).contains("identification_number", "first_name", "last_name", "email", "grade", "group");
+        assertThat(sheet.getSheetName()).isEqualTo("Estudiantes");
+        assertThat(headers).containsExactly("Número de identificación", "Nombres", "Apellidos", "Correo electrónico",
+                "Grado", "Grupo", "Año lectivo");
+        assertThat(result.getResponse().getHeader("Content-Disposition")).contains("plantilla-estudiantes.xlsx");
+    }
+
+    @Test
+    void importsSpanishHeadersWithOrWithoutAccents() {
+        Teacher t = newTeacher();
+        Context c = newContext(t);
+        List<String> accented = List.of("Número de identificación", "Nombres", "Apellidos", "Correo electrónico", "Grado",
+                "Grupo", "Año lectivo");
+        List<String> plain = List.of("NUMERO DE IDENTIFICACION", "nombres", "apellidos", "correo electronico", "grado",
+                "grupo", "ano lectivo");
+        for (List<String> headers : List.of(accented, plain)) {
+            JsonNode result = importFile(t, xlsx(headers, List.of(row(unique("ID"), "Ana", "Pérez", "", c, YEAR))),
+                    "estudiantes.xlsx", 201);
+            assertThat(result.get("errors")).as(headers.toString()).isEmpty();
+            assertThat(result.get("successfulRows").asInt()).as(headers.toString()).isEqualTo(1);
+        }
+        assertThat(get(t, "/api/v1/students?groupId=" + c.groupId(), 200).get("totalElements").asInt()).isEqualTo(2);
     }
 }

@@ -12,7 +12,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
-/** El Excel combinado de un teaching period (hojas Students/Grades/Attendance) exporta e importa en un solo archivo. */
+/** El Excel combinado de un teaching period (hojas Estudiantes/Notas/Asistencia) exporta e importa en un solo archivo. */
 class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
 
     private static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -20,6 +20,8 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
     private byte[] downloadFull(Teacher t, long teachingPeriodId) {
         MvcResult result = download(t, "/api/v1/exports/teaching-periods/" + teachingPeriodId + "/full");
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        assertThat(result.getResponse().getHeader("Content-Disposition"))
+                .contains("periodo-" + teachingPeriodId + "-completo.xlsx");
         return result.getResponse().getContentAsByteArray();
     }
 
@@ -47,15 +49,16 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 "sessionDate", YEAR + "-02-01", "maximumScore", 1), 201).get("id").asLong();
 
         byte[] initial = downloadFull(t, c.teachingPeriodId());
-        Sheet students = sheet(initial, "Students");
-        Sheet grades = sheet(initial, "Grades");
-        Sheet attendance = sheet(initial, "Attendance");
+        Sheet students = sheet(initial, "Estudiantes");
+        Sheet grades = sheet(initial, "Notas");
+        Sheet attendance = sheet(initial, "Asistencia");
         assertThat(students).isNotNull();
         assertThat(grades).isNotNull();
         assertThat(attendance).isNotNull();
 
+        assertThat(header(students, 0)).isEqualTo("Número de identificación");
         String gradeHeader = header(grades, 3);
-        assertThat(gradeHeader).startsWith("Taller 1 #" + activityId).contains("max 5");
+        assertThat(gradeHeader).isEqualTo("Taller 1 #" + activityId + " (máx. 5)");
         String attendanceHeader = header(attendance, 3);
         assertThat(attendanceHeader).isEqualTo(YEAR + "-02-01 #" + sessionId);
 
@@ -68,13 +71,14 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 List.<Object>of(s1.identification(), "4"),
                 List.<Object>of(s2.identification(), ""));
         List<List<Object>> attendanceRows = List.of(
-                List.<Object>of(s1.identification(), "PRESENT"),
-                List.<Object>of(s2.identification(), "ABSENT"));
+                List.<Object>of(s1.identification(), "Presente"),
+                List.<Object>of(s2.identification(), "Ausente"));
 
+        String idHeader = header(students, 0);
         byte[] reupload = xlsxWorkbook(List.of(
-                new TabularData("Students", List.of("identification_number", "first_name", "last_name", "email"), studentRows),
-                new TabularData("Grades", List.of("identification_number", gradeHeader), gradeRows),
-                new TabularData("Attendance", List.of("identification_number", attendanceHeader), attendanceRows)));
+                new TabularData("Estudiantes", List.of(idHeader, "Nombres", "Apellidos", "Correo electrónico"), studentRows),
+                new TabularData("Notas", List.of(idHeader, gradeHeader), gradeRows),
+                new TabularData("Asistencia", List.of(idHeader, attendanceHeader), attendanceRows)));
 
         JsonNode result = uploadFull(t, c.teachingPeriodId(), reupload, 201);
         assertThat(result.get("errors")).isEmpty();
@@ -113,15 +117,15 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 "maximumScore", 5), 201).get("id").asLong();
 
         byte[] initial = downloadFull(t, c.teachingPeriodId());
-        String gradeHeader = header(sheet(initial, "Grades"), 3);
+        String gradeHeader = header(sheet(initial, "Notas"), 3);
 
-        byte[] upload = xlsxWorkbook(List.of(new TabularData("Grades", List.of("identification_number", gradeHeader),
+        byte[] upload = xlsxWorkbook(List.of(new TabularData("Notas", List.of("Número de identificación", gradeHeader),
                 List.of(List.<Object>of(s1.identification(), "10"), List.<Object>of(s2.identification(), "3")))));
 
         JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 201);
         assertThat(result.get("failedRows").asInt()).isEqualTo(1);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(1);
-        assertThat(result.get("errors").toString()).contains("between 0 and 5");
+        assertThat(result.get("errors").toString()).contains("Notas:Quiz").contains("Debe estar entre 0 y 5");
 
         JsonNode activityGrades = get(t, "/api/v1/activities/" + activityId + "/grades", 200);
         for (JsonNode g : activityGrades) {
@@ -132,6 +136,69 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 assertThat(g.get("grade").isNull()).isTrue();
             }
         }
+    }
+
+    /** Archivos descargados antes de traducir el Excel (hojas, encabezados y valores en inglés) se siguen importando. */
+    @Test
+    void legacyEnglishWorkbookStillImports() {
+        Teacher t = newTeacher();
+        Context c = newContext(t);
+        Student s = importStudents(t, c, 1).get(0);
+        long activityId = post(t, "/api/v1/activities", Map.of("teachingPeriodId", c.teachingPeriodId(), "name", "Taller 1",
+                "maximumScore", 5), 201).get("id").asLong();
+        long sessionId = post(t, "/api/v1/attendance-sessions", Map.of("teachingPeriodId", c.teachingPeriodId(),
+                "sessionDate", YEAR + "-02-01"), 201).get("id").asLong();
+
+        byte[] legacy = xlsxWorkbook(List.of(
+                new TabularData("Students", List.of("identification_number", "first_name", "last_name", "email"),
+                        List.of(List.<Object>of(s.identification(), "Nombre", "Apellido", ""))),
+                new TabularData("Grades", List.of("identification_number", "last_name", "first_name",
+                        "Taller 1 #" + activityId + " (max 5)"), List.of(List.<Object>of(s.identification(), "A", "N", "3.5"))),
+                new TabularData("Attendance", List.of("identification_number", "last_name", "first_name",
+                        YEAR + "-02-01 #" + sessionId), List.of(List.<Object>of(s.identification(), "A", "N", "EXCUSED")))));
+
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), legacy, 201);
+        assertThat(result.get("errors")).isEmpty();
+        assertThat(result.get("successfulRows").asInt()).isEqualTo(3);
+        assertThat(gradeOf(t, activityId, s.id())).isEqualTo(3.5);
+        assertThat(statusOf(t, sessionId, s.id())).isEqualTo("EXCUSED");
+    }
+
+    /** Las columnas dinámicas se reconocen por su #id: renombrar la actividad después de exportar no rompe la reimportación. */
+    @Test
+    void renamedActivityIsStillRecognizedByItsId() {
+        Teacher t = newTeacher();
+        Context c = newContext(t);
+        Student s = importStudents(t, c, 1).get(0);
+        long activityId = post(t, "/api/v1/activities", Map.of("teachingPeriodId", c.teachingPeriodId(), "name", "Taller 1",
+                "maximumScore", 5), 201).get("id").asLong();
+        byte[] initial = downloadFull(t, c.teachingPeriodId());
+        String gradeHeader = header(sheet(initial, "Notas"), 3);
+        put(t, "/api/v1/activities/" + activityId, Map.of("name", "Taller renombrado", "maximumScore", 5), 200);
+
+        byte[] upload = xlsxWorkbook(List.of(new TabularData("Notas", List.of("Número de identificación", gradeHeader),
+                List.of(List.<Object>of(s.identification(), "4")))));
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 201);
+        assertThat(result.get("errors")).isEmpty();
+        assertThat(gradeOf(t, activityId, s.id())).isEqualTo(4.0);
+    }
+
+    private Double gradeOf(Teacher t, long activityId, long studentId) {
+        for (JsonNode g : get(t, "/api/v1/activities/" + activityId + "/grades", 200)) {
+            if (g.get("studentId").asLong() == studentId) {
+                return g.get("grade").isNull() ? null : g.get("grade").asDouble();
+            }
+        }
+        return null;
+    }
+
+    private String statusOf(Teacher t, long sessionId, long studentId) {
+        for (JsonNode n : get(t, "/api/v1/attendance-sessions/" + sessionId, 200).get("students")) {
+            if (n.get("studentId").asLong() == studentId) {
+                return n.get("status").asText();
+            }
+        }
+        return null;
     }
 
     @Test
