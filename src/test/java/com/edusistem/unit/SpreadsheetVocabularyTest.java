@@ -3,8 +3,10 @@ package com.edusistem.unit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.edusistem.core.shared.domain.vo.PeriodWorkbookColumns;
+import com.edusistem.core.shared.domain.vo.SchoolSetupSheets;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
@@ -46,5 +48,24 @@ class SpreadsheetVocabularyTest {
         assertThat(PeriodWorkbookColumns.idFromHeader(PeriodWorkbookColumns.sessionHeader(LocalDate.of(2026, 2, 10), 34)))
                 .contains(34L);
         assertThat(PeriodWorkbookColumns.idFromHeader("apellidos")).isEmpty();
+    }
+
+    @Test
+    void daysOfWeekAcceptSpanishWithOrWithoutAccentsAbbreviationsAndEnglish() {
+        assertThat(SpreadsheetVocabulary.dayLabel(DayOfWeek.WEDNESDAY)).isEqualTo("Miércoles");
+        assertThat(SpreadsheetVocabulary.dayOfWeek("Miércoles")).contains(DayOfWeek.WEDNESDAY);
+        assertThat(SpreadsheetVocabulary.dayOfWeek("miercoles")).contains(DayOfWeek.WEDNESDAY);
+        assertThat(SpreadsheetVocabulary.dayOfWeek("Sáb.")).contains(DayOfWeek.SATURDAY);
+        assertThat(SpreadsheetVocabulary.dayOfWeek("Lu")).contains(DayOfWeek.MONDAY);
+        assertThat(SpreadsheetVocabulary.dayOfWeek("FRIDAY")).contains(DayOfWeek.FRIDAY);
+        assertThat(SpreadsheetVocabulary.dayOfWeek("Feriado")).isEmpty();
+    }
+
+    @Test
+    void percentHeadersNormalizeToTheirCanonicalColumn() {
+        var classes = SchoolSetupSheets.spec(SchoolSetupSheets.CLASSES);
+        assertThat(classes.canonicalColumn(SpreadsheetVocabulary.normalize("% Exámenes"))).isEqualTo("exams_weight");
+        assertThat(classes.canonicalColumn(SpreadsheetVocabulary.normalize("% asistencia"))).isEqualTo("attendance_weight");
+        assertThat(classes.canonicalColumn(SpreadsheetVocabulary.normalize("Nota minima"))).isEqualTo("passing_grade");
     }
 }

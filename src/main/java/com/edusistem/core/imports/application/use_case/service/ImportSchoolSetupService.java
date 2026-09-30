@@ -46,8 +46,10 @@ import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
+import com.edusistem.core.shared.domain.vo.SchoolSetupSheets;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary.SheetSpec;
+import com.edusistem.core.shared.domain.vo.TabularData;
 import com.edusistem.core.student.domain.entity.Student;
 import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import com.edusistem.core.subject.application.use_case.dtos.SubjectCommands;
@@ -56,13 +58,13 @@ import com.edusistem.core.subject.domain.inputports.ManageSubjectUseCase;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -74,70 +76,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Importación combinada de la configuración completa de un profesor: 9 hojas, todas opcionales, procesadas en orden
- * de dependencia (AcademicPeriods, AcademicGrades, Subjects, Groups, Classes, Students, Activities, ActivityGrades,
- * Attendance). A diferencia de {@link ImportTeachingPeriodDataService} (que edita un teaching period que ya existe,
+ * Importación combinada de la configuración completa de un profesor: 10 hojas, todas opcionales, procesadas en orden
+ * de dependencia (AcademicPeriods, AcademicGrades, Subjects, Groups, Classes —con su configuración de notas—,
+ * Schedules, Students, Activities, ActivityGrades, Attendance; ver {@link SchoolSetupSheets}). A diferencia de {@link ImportTeachingPeriodDataService} (que edita un teaching period que ya existe,
  * con columnas dinámicas por id), aquí los ids todavía no existen: cada hoja referencia sus dependencias por nombre
  * y se resuelven ("buscar o crear") contra la base de datos a medida que se procesan las hojas en orden. Cada fila
  * se valida antes de aplicarse: una fila o celda incorrecta no aborta el resto de la importación.
  */
 public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
 
+    private static final String ACADEMIC_PERIODS = SchoolSetupSheets.ACADEMIC_PERIODS;
+    private static final String ACADEMIC_GRADES = SchoolSetupSheets.ACADEMIC_GRADES;
+    private static final String SUBJECTS = SchoolSetupSheets.SUBJECTS;
+    private static final String GROUPS = SchoolSetupSheets.GROUPS;
+    private static final String CLASSES = SchoolSetupSheets.CLASSES;
+    private static final String SCHEDULES = SchoolSetupSheets.SCHEDULES;
+    private static final String STUDENTS = SchoolSetupSheets.STUDENTS;
+    private static final String ACTIVITIES = SchoolSetupSheets.ACTIVITIES;
+    private static final String ACTIVITY_GRADES = SchoolSetupSheets.ACTIVITY_GRADES;
+    private static final String ATTENDANCE = SchoolSetupSheets.ATTENDANCE;
+
     private static final Logger log = LoggerFactory.getLogger(ImportSchoolSetupService.class);
     private static final int MAX_RETURNED_ERRORS = 500;
     private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
-
-    /** Columnas con las que las hojas que dependen de una clase la identifican. */
-    private static final Map<String, String> CLASS_COLUMNS = Map.of(
-            "grade_name", "Grado",
-            "group_name", "Grupo",
-            "academic_year", "Año lectivo",
-            "subject_name", "Asignatura",
-            "academic_period_name", "Periodo",
-            "class", "Clase");
-
-    /**
-     * Hojas de la plantilla, por nombre canónico, con sus encabezados en español. Al leer también se aceptan los
-     * nombres y encabezados en inglés de las plantillas descargadas antes de traducirlas.
-     */
-    private static final Map<String, SheetSpec> SHEETS = sheets(
-            new SheetSpec("AcademicPeriods", "Periodos", Map.of(
-                    "name", "Nombre",
-                    "start_date", "Fecha de inicio",
-                    "end_date", "Fecha de fin")),
-            new SheetSpec("AcademicGrades", "Grados", Map.of(
-                    "name", "Nombre",
-                    "description", "Descripción")),
-            new SheetSpec("Subjects", "Asignaturas", Map.of(
-                    "name", "Nombre",
-                    "description", "Descripción")),
-            new SheetSpec("Groups", "Grupos", Map.of(
-                    "grade_name", "Grado",
-                    "name", "Nombre",
-                    "academic_year", "Año lectivo")),
-            new SheetSpec("Classes", "Clases", CLASS_COLUMNS),
-            new SheetSpec("Students", "Estudiantes", Map.of(
-                    "identification_number", "Número de identificación",
-                    "first_name", "Nombres",
-                    "last_name", "Apellidos",
-                    "email", "Correo electrónico",
-                    "grade_name", "Grado",
-                    "group_name", "Grupo",
-                    "academic_year", "Año lectivo")),
-            new SheetSpec("Activities", "Actividades", withClassColumns(Map.of(
-                    "name", "Nombre",
-                    "description", "Descripción",
-                    "evaluation_date", "Fecha de evaluación",
-                    "maximum_score", "Puntaje máximo",
-                    "activity_type", "Tipo"))),
-            new SheetSpec("ActivityGrades", "Notas de actividades", withClassColumns(Map.of(
-                    "activity_name", "Actividad",
-                    "identification_number", "Número de identificación",
-                    "grade", "Nota"))),
-            new SheetSpec("Attendance", "Asistencia", withClassColumns(Map.of(
-                    "session_date", "Fecha de sesión",
-                    "identification_number", "Número de identificación",
-                    "status", "Estado"))));
 
     private final SpreadsheetReaderPort reader;
     private final SpreadsheetWriterPort writer;
@@ -165,6 +126,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
     private final GradeActivityUseCase gradeActivity;
     private final AttendanceSessionRepositoryPort sessions;
     private final ManageAttendanceUseCase attendance;
+    private final ClassSetupApplier classSetup;
 
     public ImportSchoolSetupService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
                                     ImportBatchRepositoryPort batches, FileStoragePort storage, RecordAuditUseCase audit,
@@ -178,7 +140,8 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                                     ManageTeachingPeriodUseCase manageTeachingPeriod, StudentRepositoryPort students,
                                     StudentImportApplier applier, ActivityRepositoryPort activityRepo,
                                     ManageActivityUseCase manageActivity, GradeActivityUseCase gradeActivity,
-                                    AttendanceSessionRepositoryPort sessions, ManageAttendanceUseCase attendance) {
+                                    AttendanceSessionRepositoryPort sessions, ManageAttendanceUseCase attendance,
+                                    ClassSetupApplier classSetup) {
         this.reader = reader;
         this.writer = writer;
         this.batches = batches;
@@ -204,6 +167,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         this.gradeActivity = gradeActivity;
         this.sessions = sessions;
         this.attendance = attendance;
+        this.classSetup = classSetup;
     }
 
     private record ClassKey(String gradeName, String groupName, int academicYear, String subjectName,
@@ -239,6 +203,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
             totalRows += applySubjects(teacherId, workbook, errors, failedKeys);
             totalRows += applyGroups(teacherId, workbook, errors, failedKeys);
             totalRows += applyClasses(teacherId, workbook, teachingPeriodCache, errors, failedKeys);
+            totalRows += applySchedules(teacherId, workbook, teachingPeriodCache, errors, failedKeys);
             totalRows += applyStudents(teacherId, workbook, errors, failedKeys);
             totalRows += applyActivities(teacherId, workbook, teachingPeriodCache, activityByPeriodThenName, errors, failedKeys);
             totalRows += applyActivityGrades(teacherId, workbook, teachingPeriodCache, activityByPeriodThenName,
@@ -255,37 +220,33 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
 
     @Override
     public byte[] template() {
+        List<String> scaleOptions = classSetup.scaleOptions(null);
+        List<Object> exampleClass = List.of("10°", "A", 2026, "Matemáticas", "2026-1");
         return writer.writeWorkbook(List.of(
-                sheet("AcademicPeriods").table( List.of("name", "start_date", "end_date"),
-                        List.of(List.of("2026-1", LocalDate.of(2026, 1, 20), LocalDate.of(2026, 6, 15)))),
-                sheet("AcademicGrades").table( List.of("name", "description"),
-                        List.of(List.of("10°", "Décimo grado"))),
-                sheet("Subjects").table( List.of("name", "description"),
-                        List.of(List.of("Matemáticas", "Matemáticas de grado 10"))),
-                sheet("Groups").table( List.of("grade_name", "name", "academic_year"),
-                        List.of(List.of("10°", "A", 2026))),
-                sheet("Classes").table(
-                        List.of("grade_name", "group_name", "academic_year", "subject_name", "academic_period_name"),
-                        List.of(List.of("10°", "A", 2026, "Matemáticas", "2026-1"))),
-                sheet("Students").table(
-                        List.of("identification_number", "first_name", "last_name", "email", "grade_name", "group_name",
-                                "academic_year"),
-                        List.of(List.of("1001234567", "Ana", "Pérez", "ana.perez@example.com", "10°", "A", 2026))),
-                sheet("Activities").table(
-                        List.of("grade_name", "group_name", "academic_year", "subject_name", "academic_period_name",
-                                "name", "description", "evaluation_date", "maximum_score", "activity_type"),
-                        List.of(List.of("10°", "A", 2026, "Matemáticas", "2026-1", "Taller 1", "Taller de repaso",
-                                LocalDateTime.of(2026, 2, 10, 9, 0), BigDecimal.valueOf(5), "TALLER"))),
-                sheet("ActivityGrades").table(
-                        List.of("grade_name", "group_name", "academic_year", "subject_name", "academic_period_name",
-                                "activity_name", "identification_number", "grade"),
-                        List.of(List.of("10°", "A", 2026, "Matemáticas", "2026-1", "Taller 1", "1001234567",
-                                BigDecimal.valueOf(4.5)))),
-                sheet("Attendance").table(
-                        List.of("grade_name", "group_name", "academic_year", "subject_name", "academic_period_name",
-                                "session_date", "identification_number", "status"),
-                        List.of(List.of("10°", "A", 2026, "Matemáticas", "2026-1", LocalDate.of(2026, 2, 10),
-                                "1001234567", SpreadsheetVocabulary.attendanceLabel("PRESENT"))))));
+                SchoolSetupSheets.instructions(),
+                table(ACADEMIC_PERIODS, List.of("2026-1", LocalDate.of(2026, 1, 20), LocalDate.of(2026, 6, 15))),
+                table(ACADEMIC_GRADES, List.of("10°", "Décimo grado")),
+                table(SUBJECTS, List.of("Matemáticas", "Matemáticas de grado 10")),
+                table(GROUPS, List.of("10°", "A", 2026)),
+                SchoolSetupSheets.table(CLASSES, List.of(withClass(exampleClass, "0-5", 3, 40, 40, 20)), scaleOptions),
+                table(SCHEDULES, withClass(exampleClass, SpreadsheetVocabulary.dayLabel(DayOfWeek.MONDAY),
+                        LocalTime.of(7, 0), LocalTime.of(8, 0), "Salón 201")),
+                table(STUDENTS, List.of("1001234567", "Ana", "Pérez", "ana.perez@example.com", "10°", "A", 2026)),
+                table(ACTIVITIES, withClass(exampleClass, "Taller 1", "Taller de repaso",
+                        LocalDateTime.of(2026, 2, 10, 9, 0), BigDecimal.valueOf(5), "Taller")),
+                table(ACTIVITY_GRADES, withClass(exampleClass, "Taller 1", "1001234567", BigDecimal.valueOf(4.5))),
+                table(ATTENDANCE, withClass(exampleClass, LocalDate.of(2026, 2, 10), "1001234567",
+                        SpreadsheetVocabulary.attendanceLabel("PRESENT")))));
+    }
+
+    private static TabularData table(String sheetName, List<Object> exampleRow) {
+        return SchoolSetupSheets.table(sheetName, List.of(exampleRow), List.of());
+    }
+
+    private static List<Object> withClass(List<Object> classKey, Object... values) {
+        List<Object> row = new ArrayList<>(classKey);
+        row.addAll(List.of(values));
+        return row;
     }
 
     // ------------------------------------------------------------------ AcademicPeriods
@@ -439,6 +400,7 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         for (SpreadsheetRow row : sheet.rows()) {
             int before = errors.size();
             ClassKey key = requiredClassKey(row, "Classes", errors);
+            Optional<ClassSetupApplier.GradingInput> grading = classSetup.readGrading(teacherId, row, errors);
             if (errors.size() > before || key == null) {
                 failedKeys.add("Classes#" + row.rowNumber());
                 continue;
@@ -480,9 +442,44 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                         .orElseGet(() -> manageTeachingPeriod
                                 .create(new AcademicCommands.CreateTeachingPeriod(teacherId, assignmentId, periodId)).id());
                 teachingPeriodCache.put(key, teachingPeriodId);
+                if (grading.isPresent() && !classSetup.applyGrading(teacherId, row, teachingPeriodId, grading.get(), errors)) {
+                    failedKeys.add("Classes#" + row.rowNumber());
+                }
             } catch (RuntimeException e) {
                 errors.add(new ImportRowError(row.rowNumber(), sheet("Classes").label(), ImportMessages.couldNotCreate(e.getMessage())));
                 failedKeys.add("Classes#" + row.rowNumber());
+            }
+        }
+        return sheet.rows().size();
+    }
+
+    // ------------------------------------------------------------------ Schedules
+
+    private int applySchedules(Long teacherId, ParsedWorkbook wb, Map<ClassKey, Long> teachingPeriodCache,
+                               List<ImportRowError> errors, Set<String> failedKeys) {
+        Optional<ParsedSheet> sheetOpt = wb.sheet(sheet("Schedules"));
+        if (sheetOpt.isEmpty()) {
+            return 0;
+        }
+        ParsedSheet sheet = sheetOpt.get();
+        for (String column : SchoolSetupSheets.CLASS_KEY_COLUMNS) {
+            requireColumn(sheet, column, "Schedules");
+        }
+        requireColumn(sheet, "day_of_week", "Schedules");
+        requireColumn(sheet, "start_time", "Schedules");
+        requireColumn(sheet, "end_time", "Schedules");
+
+        for (SpreadsheetRow row : sheet.rows()) {
+            int before = errors.size();
+            ClassKey key = requiredClassKey(row, "Schedules", errors);
+            ClassSetupApplier.ScheduleInput input = classSetup.readSchedule(row, errors);
+            if (errors.size() > before || key == null) {
+                failedKeys.add("Schedules#" + row.rowNumber());
+                continue;
+            }
+            Long teachingPeriodId = resolveTeachingPeriod(row, "Schedules", teacherId, key, teachingPeriodCache, errors);
+            if (teachingPeriodId == null || !classSetup.applySchedule(teacherId, row, teachingPeriodId, input, errors)) {
+                failedKeys.add("Schedules#" + row.rowNumber());
             }
         }
         return sheet.rows().size();
@@ -532,7 +529,9 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
                 }
             }
             if (identification != null) {
-                Integer first = seenIdentifications.putIfAbsent(identification, row.rowNumber());
+                // el mismo estudiante puede venir en varias filas si está matriculado en varios grupos
+                String enrollmentKey = identification + "|" + gradeName + "|" + groupName + "|" + year;
+                Integer first = seenIdentifications.putIfAbsent(enrollmentKey, row.rowNumber());
                 if (first != null) {
                     errors.add(new ImportRowError(row.rowNumber(), ref("Students", "identification_number"),
                             ImportMessages.duplicatedInFile(first)));
@@ -869,22 +868,8 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
 
     // ------------------------------------------------------------------ hojas y encabezados
 
-    private static Map<String, SheetSpec> sheets(SheetSpec... specs) {
-        Map<String, SheetSpec> byName = new LinkedHashMap<>();
-        for (SheetSpec spec : specs) {
-            byName.put(spec.name(), spec);
-        }
-        return byName;
-    }
-
-    private static Map<String, String> withClassColumns(Map<String, String> columns) {
-        Map<String, String> all = new LinkedHashMap<>(CLASS_COLUMNS);
-        all.putAll(columns);
-        return all;
-    }
-
     private static SheetSpec sheet(String name) {
-        return SHEETS.get(name);
+        return SchoolSetupSheets.spec(name);
     }
 
     /** Referencia "Hoja:Columna" en español para los errores por fila. */
@@ -968,12 +953,11 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
             errors.add(new ImportRowError(row.rowNumber(), ref(sheetName, column), ImportMessages.REQUIRED));
             return null;
         }
-        try {
-            return LocalDate.parse(raw);
-        } catch (DateTimeParseException e) {
+        LocalDate date = CellValues.date(raw);
+        if (date == null) {
             errors.add(new ImportRowError(row.rowNumber(), ref(sheetName, column), ImportMessages.INVALID_DATE));
-            return null;
         }
+        return date;
     }
 
     private static LocalDateTime parseDateTimeOrNull(SpreadsheetRow row, String column, String sheetName,
@@ -982,13 +966,11 @@ public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
         if (raw == null) {
             return null;
         }
-        try {
-            return LocalDateTime.parse(raw.replace(' ', 'T'));
-        } catch (DateTimeParseException e) {
-            errors.add(new ImportRowError(row.rowNumber(), ref(sheetName, column),
-                    ImportMessages.INVALID_DATE_TIME));
-            return null;
+        LocalDateTime dateTime = CellValues.dateTime(raw);
+        if (dateTime == null) {
+            errors.add(new ImportRowError(row.rowNumber(), ref(sheetName, column), ImportMessages.INVALID_DATE_TIME));
         }
+        return dateTime;
     }
 
     private static AttendanceStatus parseStatus(SpreadsheetRow row, String sheetName, List<ImportRowError> errors) {

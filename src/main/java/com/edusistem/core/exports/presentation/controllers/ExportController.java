@@ -1,5 +1,6 @@
 package com.edusistem.core.exports.presentation.controllers;
 
+import com.edusistem.core.exports.domain.inputports.ExportSchoolSetupUseCase;
 import com.edusistem.core.exports.domain.inputports.ExportUseCase;
 import com.edusistem.core.exports.domain.vo.ExportedFile;
 import com.edusistem.core.shared.infrastructure.security.AuthenticatedUser;
@@ -24,9 +25,11 @@ public class ExportController {
     private static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final ExportUseCase exports;
+    private final ExportSchoolSetupUseCase schoolSetup;
 
-    public ExportController(ExportUseCase exports) {
+    public ExportController(ExportUseCase exports, ExportSchoolSetupUseCase schoolSetup) {
         this.exports = exports;
+        this.schoolSetup = schoolSetup;
     }
 
     @GetMapping("/students")
@@ -55,6 +58,17 @@ public class ExportController {
                     + "POST /imports/teaching-periods/{teachingPeriodId}: se descarga, se edita y se vuelve a subir.")
     public ResponseEntity<byte[]> full(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long teachingPeriodId) {
         return xlsx(exports.full(user.id(), teachingPeriodId));
+    }
+
+    @GetMapping("/school-setup")
+    @Operation(summary = "Descarga toda la configuración del profesor en un solo Excel",
+            description = "Mismo formato que GET /imports/school-setup/template: Instrucciones, Periodos, Grados, "
+                    + "Asignaturas, Grupos, Clases (con escala, nota mínima y % Exámenes/Actividades/Asistencia), "
+                    + "Horarios, Estudiantes, Actividades, Notas de actividades y Asistencia, con los datos actuales. "
+                    + "Sirve como respaldo y se puede editar y volver a subir en POST /imports/school-setup sin crear "
+                    + "duplicados. No incluye estudiantes sin número de identificación.")
+    public ResponseEntity<byte[]> schoolSetup(@AuthenticationPrincipal AuthenticatedUser user) {
+        return xlsx(schoolSetup.schoolSetup(user.id()));
     }
 
     private static ResponseEntity<byte[]> xlsx(ExportedFile file) {

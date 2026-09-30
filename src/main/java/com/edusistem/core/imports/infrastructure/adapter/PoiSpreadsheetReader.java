@@ -9,6 +9,10 @@ import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +30,8 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
+
+    private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final DataFormatter formatter = new DataFormatter(Locale.ROOT);
 
@@ -107,9 +113,31 @@ public class PoiSpreadsheetReader implements SpreadsheetReaderPort {
             return "";
         }
         CellType type = cell.getCellType() == CellType.FORMULA ? cell.getCachedFormulaResultType() : cell.getCellType();
-        if (type == CellType.NUMERIC && !DateUtil.isCellDateFormatted(cell)) {
+        if (type == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+            return isoDateOrTime(cell.getNumericCellValue());
+        }
+        if (type == CellType.NUMERIC && !isPercentFormatted(cell)) {
             return new BigDecimal(String.valueOf(cell.getNumericCellValue())).stripTrailingZeros().toPlainString();
         }
         return formatter.formatCellValue(cell).trim();
+    }
+
+    /**
+     * Fechas y horas siempre en formato ISO, sin importar cómo las muestre Excel (p. ej. "15/03/2026" en un Excel en
+     * español): "aaaa-mm-dd", "aaaa-mm-dd hh:mm" o, si sólo hay hora, "hh:mm".
+     */
+    private static String isoDateOrTime(double excelValue) {
+        LocalDateTime value = DateUtil.getLocalDateTime(excelValue).truncatedTo(ChronoUnit.MINUTES);
+        if (excelValue < 1) {
+            return value.toLocalTime().format(HH_MM);
+        }
+        return value.toLocalTime().equals(LocalTime.MIDNIGHT) ? value.toLocalDate().toString()
+                : value.toLocalDate() + " " + value.toLocalTime().format(HH_MM);
+    }
+
+    /** Una celda con formato de porcentaje se lee como la muestra Excel ("30%"), no como su valor interno (0.3). */
+    private static boolean isPercentFormatted(Cell cell) {
+        String format = cell.getCellStyle().getDataFormatString();
+        return format != null && format.contains("%");
     }
 }

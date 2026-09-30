@@ -4,18 +4,25 @@ import com.edusistem.core.academic.domain.inputports.ManageAcademicPeriodUseCase
 import com.edusistem.core.academic.domain.inputports.ManageGradeUseCase;
 import com.edusistem.core.academic.domain.inputports.ManageGroupUseCase;
 import com.edusistem.core.academic.domain.inputports.ManageTeachingAssignmentUseCase;
+import com.edusistem.core.academic.domain.inputports.ManageTeachingPeriodScheduleUseCase;
 import com.edusistem.core.academic.domain.inputports.ManageTeachingPeriodUseCase;
 import com.edusistem.core.academic.domain.outputports.AcademicPeriodRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.GradeRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.GroupRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingAssignmentRepositoryPort;
 import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPort;
+import com.edusistem.core.academic.domain.outputports.TeachingPeriodScheduleRepositoryPort;
 import com.edusistem.core.activity.domain.inputports.GradeActivityUseCase;
 import com.edusistem.core.activity.domain.inputports.ManageActivityUseCase;
 import com.edusistem.core.activity.domain.outputports.ActivityRepositoryPort;
 import com.edusistem.core.attendance.domain.inputports.ManageAttendanceUseCase;
 import com.edusistem.core.attendance.domain.outputports.AttendanceSessionRepositoryPort;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
+import com.edusistem.core.evaluation.domain.outputports.EvaluationCategoryRepositoryPort;
+import com.edusistem.core.grading.domain.inputports.ConfigureGradingUseCase;
+import com.edusistem.core.grading.domain.outputports.GradingConfigurationRepositoryPort;
+import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
+import com.edusistem.core.imports.application.use_case.service.ClassSetupApplier;
 import com.edusistem.core.imports.application.use_case.service.ImportFileRetentionService;
 import com.edusistem.core.imports.application.use_case.service.ImportQueryService;
 import com.edusistem.core.imports.application.use_case.service.ImportSchoolSetupService;
@@ -42,6 +49,17 @@ public class ImportBeanConfig {
     @Bean
     StudentImportApplier studentImportApplier(RegisterStudentUseCase students) {
         return new StudentImportApplier(students);
+    }
+
+    @Bean
+    ClassSetupApplier classSetupApplier(ConfigureGradingUseCase configureGrading,
+                                        GradingConfigurationRepositoryPort configurations,
+                                        GradingScaleRepositoryPort scales, EvaluationCategoryRepositoryPort categories,
+                                        ManageTeachingPeriodScheduleUseCase manageSchedule,
+                                        TeachingPeriodScheduleRepositoryPort schedules,
+                                        TeachingPeriodRepositoryPort teachingPeriods) {
+        return new ClassSetupApplier(configureGrading, configurations, scales, categories, manageSchedule, schedules,
+                                     teachingPeriods);
     }
 
     @Bean
@@ -73,12 +91,14 @@ public class ImportBeanConfig {
                                                       ManageActivityUseCase manageActivity,
                                                       GradeActivityUseCase gradeActivity,
                                                       AttendanceSessionRepositoryPort sessions,
-                                                      ManageAttendanceUseCase attendance) {
+                                                      ManageAttendanceUseCase attendance,
+                                                      ClassSetupApplier classSetup) {
         return new ImportSchoolSetupService(reader, writer, batches, storage, audit, clock, academicPeriods,
                                             manageAcademicPeriod, grades, manageGrade, subjects, manageSubject,
                                             groups, manageGroup, teachingAssignments, manageTeachingAssignment,
                                             teachingPeriods, manageTeachingPeriod, students, applier,
-                                            activityRepo, manageActivity, gradeActivity, sessions, attendance);
+                                            activityRepo, manageActivity, gradeActivity, sessions, attendance,
+                                            classSetup);
     }
 
     @Bean

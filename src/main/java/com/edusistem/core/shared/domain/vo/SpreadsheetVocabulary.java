@@ -1,6 +1,7 @@
 package com.edusistem.core.shared.domain.vo;
 
 import java.text.Normalizer;
+import java.time.DayOfWeek;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,13 +52,29 @@ public final class SpreadsheetVocabulary {
             "ABSENT", "Ausente",
             "EXCUSED", "Excusado");
 
+    /** Estados de asistencia tal como se ofrecen en las listas desplegables. */
+    public static final List<String> ATTENDANCE_STATUS_LABELS = List.of("Presente", "Ausente", "Excusado");
+
     private static final Map<String, String> ATTENDANCE_BY_NORMALIZED = new HashMap<>();
+
+    /** Días de la semana en el orden de {@link DayOfWeek} (lunes primero). */
+    public static final List<String> DAY_LABELS = List.of("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado",
+            "Domingo");
+
+    private static final Map<String, DayOfWeek> DAY_BY_NORMALIZED = new HashMap<>();
 
     static {
         ATTENDANCE_LABELS.forEach((status, label) -> {
             ATTENDANCE_BY_NORMALIZED.put(normalize(status), status);
             ATTENDANCE_BY_NORMALIZED.put(normalize(label), status);
         });
+        for (DayOfWeek day : DayOfWeek.values()) {
+            String label = DAY_LABELS.get(day.ordinal());
+            DAY_BY_NORMALIZED.put(normalize(day.name()), day);
+            DAY_BY_NORMALIZED.put(normalize(label), day);
+            DAY_BY_NORMALIZED.put(normalize(label).substring(0, 2), day);
+            DAY_BY_NORMALIZED.put(normalize(label).substring(0, 3), day);
+        }
     }
 
     private SpreadsheetVocabulary() {
@@ -77,6 +94,16 @@ public final class SpreadsheetVocabulary {
     /** Nombre del enum de asistencia a partir del texto de una celda; acepta español o inglés, con o sin tildes. */
     public static Optional<String> attendanceStatusName(String raw) {
         return Optional.ofNullable(ATTENDANCE_BY_NORMALIZED.get(normalize(raw)));
+    }
+
+    /** Etiqueta en español de un día de la semana ("Lunes"). */
+    public static String dayLabel(DayOfWeek day) {
+        return DAY_LABELS.get(day.ordinal());
+    }
+
+    /** Día de la semana a partir del texto de una celda: "Lunes", "lunes", "Miercoles", "Mié", "Lu" o "MONDAY". */
+    public static Optional<DayOfWeek> dayOfWeek(String raw) {
+        return Optional.ofNullable(DAY_BY_NORMALIZED.get(normalize(raw).replaceAll("\\.$", "")));
     }
 
     /** Hoja de un Excel: nombre canónico, etiqueta en español y etiquetas en español de sus columnas conocidas. */

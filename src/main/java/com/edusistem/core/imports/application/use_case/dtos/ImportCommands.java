@@ -13,8 +13,8 @@ public final class ImportCommands {
     }
 
     /**
-     * Excel combinado de configuración completa (9 hojas, todas opcionales): AcademicPeriods, AcademicGrades,
-     * Subjects, Groups, Classes, Students, Activities, ActivityGrades, Attendance.
+     * Excel combinado de configuración completa (10 hojas, todas opcionales): AcademicPeriods, AcademicGrades,
+     * Subjects, Groups, Classes, Schedules, Students, Activities, ActivityGrades, Attendance.
      */
     public record ImportSchoolSetup(Long teacherId, String fileName, byte[] content) {
     }

@@ -93,21 +93,25 @@ public class ImportController {
     }
 
     @GetMapping("/school-setup/template")
-    @Operation(summary = "Descarga la plantilla Excel completa (9 hojas) para importar toda la configuración de un profesor",
-            description = "Hojas opcionales: Periodos, Grados, Asignaturas, Grupos, Clases, Estudiantes, Actividades, "
-                    + "Notas de actividades y Asistencia (también se aceptan los nombres en inglés de las plantillas "
-                    + "antiguas). Se procesan en ese orden: cada hoja referencia sus dependencias por nombre (no por "
-                    + "id) y se crean solo si aún no existen.")
+    @Operation(summary = "Descarga la plantilla Excel completa para importar toda la configuración de un profesor",
+            description = "Una hoja de Instrucciones y 10 hojas opcionales: Periodos, Grados, Asignaturas, Grupos, "
+                    + "Clases (con columnas opcionales Escala, Nota mínima, % Exámenes, % Actividades y % Asistencia), "
+                    + "Horarios, Estudiantes, Actividades, Notas de actividades y Asistencia (también se aceptan los "
+                    + "nombres en inglés de las plantillas antiguas). Se procesan en ese orden: cada hoja referencia sus "
+                    + "dependencias por nombre (no por id) y se crean solo si aún no existen. Las columnas obligatorias "
+                    + "van resaltadas y cada encabezado tiene un comentario con un ejemplo.")
     public ResponseEntity<byte[]> schoolSetupTemplate() {
         return download(importSchoolSetup.template(), "plantilla-configuracion-escolar.xlsx");
     }
 
     @PostMapping(value = "/school-setup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Importa la configuración completa de un profesor desde un Excel combinado (9 hojas)",
-            description = "Crea periodos académicos, grados, materias, cursos, clases, estudiantes, actividades, "
-                    + "calificaciones y asistencia en una sola subida. GET /imports/school-setup/template genera el "
-                    + "archivo listo para editar y subir.")
+    @Operation(summary = "Importa la configuración completa de un profesor desde un Excel combinado",
+            description = "Crea periodos académicos, grados, materias, cursos, clases (y su escala, nota mínima y "
+                    + "pesos), horarios, estudiantes, actividades, calificaciones y asistencia en una sola subida. Si "
+                    + "una clase ya tiene configuración de notas y la fila trae valores, se actualiza; las celdas "
+                    + "vacías no cambian nada. Los horarios idénticos no se duplican. GET /imports/school-setup/template "
+                    + "genera el archivo vacío y GET /exports/school-setup el archivo con los datos actuales.")
     public ImportResultResponse importSchoolSetup(@AuthenticationPrincipal AuthenticatedUser user,
                                                   @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {

@@ -40,6 +40,13 @@ public class GradingScale {
         return teacherId == null || teacherId.equals(teacherIdToCheck);
     }
 
+    /** Nombre para el profesor en los Excel: las escalas del sistema por su rango ("0-5"), las propias por su nombre. */
+    public String displayName() {
+        return teacherId == null
+                ? minimumValue.stripTrailingZeros().toPlainString() + "-" + maximumValue.stripTrailingZeros().toPlainString()
+                : name;
+    }
+
     public boolean contains(BigDecimal value) {
         return value.compareTo(minimumValue) >= 0 && value.compareTo(maximumValue) <= 0;
     }
