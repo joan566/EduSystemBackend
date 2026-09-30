@@ -37,6 +37,10 @@ Los tests no usan `.env`: fijan sus propios valores y siempre desactivan el corr
 | `CORS_ALLOWED_ORIGINS` | no (vacío = CORS desactivado) | Orígenes permitidos separados por coma; admite patrones (`https://*.miapp.com`). Necesario para Flutter web |
 | `LOGIN_MAX_ATTEMPTS_PER_EMAIL`, `LOGIN_MAX_ATTEMPTS_PER_IP`, `LOGIN_LOCK_WINDOW_MINUTES` | no (`5`, `50`, `15`) | Límite de intentos de login fallidos |
 | `STORAGE_PATH` | no (`./storage`) | Carpeta de fotos de hojas, Excel importados y reportes de error |
+| `STORAGE_ENCRYPTION_KEY` | **en producción** | Clave AES-256 en Base64 (`openssl rand -base64 32`) para cifrar los archivos guardados. Vacía = sin cifrar (la app lo avisa al arrancar) |
+| `AUDIT_RETENTION_DAYS`, `AUDIT_ANONYMOUS_RETENTION_DAYS` | no (`730`, `30`) | Días que se conserva la auditoría, y la de entradas sin usuario (logins con correos inexistentes) |
+| `API_DOCS_ENABLED` | no (`false`) | Swagger UI y `/v3/api-docs`; solo en desarrollo |
+| `FORWARD_HEADERS_STRATEGY` | no (`none`) | `native` detrás de un proxy inverso (IP real del cliente para los límites); `none` sin proxy |
 | `SCHOOL_TIMEZONE` | no (`America/Bogota`) | Zona horaria IANA del colegio; define qué día es "hoy" en `/schedule/today` y el `serverTime` de la agenda |
 | `MAIL_ENABLED` | no (`false`) | Si es `true` envía el código de recuperación por SMTP |
 | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | solo con correo | SMTP |
@@ -72,6 +76,7 @@ Migraciones Flyway en `src/main/resources/db/migration`:
 * `V7__create_activities_and_attendance`: `activities`, `activity_grades`, `attendance_sessions`, `attendance_records`.
 * `V8__create_imports_and_audit`: `import_batches`, `audit_logs`.
 * `V9__seed_reference_data`: roles `TEACHER`/`ADMIN`, categorías `EXAMS`/`ACTIVITIES`/`ATTENDANCE`, escalas 0-5, 0-10, 0-100.
+* `V10__create_rate_limit_events_and_retention_indexes`: `rate_limit_events` (contadores de los límites de peticiones) e índices para las purgas por antigüedad.
 
 Cada tabla se crea con su forma final e índices sobre sus claves foráneas. Los cambios de esquema posteriores al
 lanzamiento van en migraciones nuevas (`V10__...`); nunca se editan las ya publicadas.
@@ -141,11 +146,16 @@ Errores: `{timestamp, status, code, message, path[, errors]}` (sin trazas).
 * **Un examen por (examen, estudiante)**: reenviar una hoja ya procesada exige `replace=true`; una `FAILED` se puede reintentar directamente.
 * **Transacciones**: procesar una hoja (submission + respuestas + resultado) y la aplicación de una importación son una unidad; un fallo de lectura no propaga error, deja la submission `FAILED`. Las auditorías de fallo se guardan en transacción independiente para sobrevivir al rollback.
 * **Sesiones**: access token JWT (HS256, 1 h) + refresh token opaco y rotativo (30 días, solo se guarda su SHA-256). Cada petición valida contra la base que el usuario siga activo y que `users.token_version` coincida con el del token; `logout`, cambio de contraseña, restablecimiento y reuso de un refresh token ya rotado incrementan la versión y revocan todo (todos los dispositivos). Un usuario desactivado pierde acceso de inmediato. `POST /auth/change-password` devuelve una sesión nueva para el dispositivo actual.
-* **Fuerza bruta**: 5 logins fallidos por correo (50 por IP) en 15 min → `429 TOO_MANY_LOGIN_ATTEMPTS` con `Retry-After`. Además (`edusistem.security.rate-limits`): registro 10/h por IP (`TOO_MANY_REGISTRATIONS`); `forgot-password` 3/h por correo y 20/h por IP; verificar/usar códigos 10/día por correo y 50/15 min por IP (`TOO_MANY_PASSWORD_RESET_REQUESTS`). Los límites por correo se aplican exista o no la cuenta. Los contadores están en memoria (válidos para un solo nodo) y usan la IP de la conexión: detrás de un proxy inverso pon `FORWARD_HEADERS_STRATEGY=native` (sin proxy, déjalo en `none` o un cliente podría falsear su IP con `X-Forwarded-For`).
+* **Fuerza bruta**: 5 logins fallidos por correo (50 por IP) en 15 min → `429 TOO_MANY_LOGIN_ATTEMPTS` con `Retry-After`. Además (`edusistem.security.rate-limits`): registro 10/h por IP (`TOO_MANY_REGISTRATIONS`); `forgot-password` 3/h por correo y 20/h por IP; verificar/usar códigos 10/día por correo y 50/15 min por IP (`TOO_MANY_PASSWORD_RESET_REQUESTS`). Los límites por correo se aplican exista o no la cuenta. Los contadores se guardan en `rate_limit_events` (comunes a todas las instancias, sobreviven a reinicios; `pg_advisory_xact_lock` por clave hace atómico comprobar y registrar, y cada evento se guarda en su propia transacción para que cuente aunque la petición falle) y usan la IP de la conexión: detrás de un proxy inverso pon `FORWARD_HEADERS_STRATEGY=native` (sin proxy, déjalo en `none` o un cliente podría falsear su IP con `X-Forwarded-For`).
 * **Enumeración de cuentas**: el login compara siempre contra un hash BCrypt (uno de relleno si el correo no existe) y la recuperación hace el mismo trabajo exista o no la cuenta, con el correo enviado en segundo plano, para que el tiempo de respuesta no delate cuentas. El registro sí responde `EMAIL_ALREADY_REGISTERED` (inevitable sin verificación de correo previa); lo acota el límite por IP.
 * **Documentación OpenAPI** (`/swagger-ui.html`, `/v3/api-docs`): desactivada salvo `API_DOCS_ENABLED=true` (solo en desarrollo).
 * **Supresión de datos**: `DELETE /api/v1/students/{id}` elimina al estudiante con sus notas, asistencia, observaciones, hojas de respuesta (y sus fotos) y adjuntos, y sustituye su nombre, código e identificación en la auditoría por `[estudiante eliminado]`. `DELETE /api/v1/auth/account` (con la contraseña) elimina la cuenta y todos sus datos y archivos. Ninguno se puede deshacer.
 * **Retención de archivos**: la foto anterior de una hoja reemplazada se borra; el Excel importado y su informe de errores se borran a los `IMPORT_FILE_RETENTION_DAYS` (30) días y los PDF de lotes a los `SUBMISSION_BATCH_FILE_RETENTION_DAYS` (30); en ambos casos el resumen se conserva.
+* **Retención de datos**: purgas diarias de la auditoría (`AUDIT_RETENTION_DAYS`, 730 días; las entradas sin usuario, que guardan el correo escrito en un login fallido, a los `AUDIT_ANONYMOUS_RETENTION_DAYS`, 30), de los códigos de recuperación vencidos, de los refresh tokens vencidos hace 7 días y de los eventos de límites de más de 2 días.
+* **Archivos cifrados**: con `STORAGE_ENCRYPTION_KEY` las fotos de hojas, PDF, adjuntos y Excel se guardan con AES-256-GCM (IV aleatorio por archivo; la ruta relativa va como dato autenticado, así que un archivo alterado o movido no se descifra). Los guardados antes de activar la clave se siguen leyendo en claro. **Si se pierde la clave, los archivos son irrecuperables**: guárdala en un gestor de secretos, separada de los backups. El almacenamiento es disco local: para más de una instancia, `STORAGE_PATH` debe ser un volumen compartido (NFS/EFS...).
+* **Límites de imágenes**: una foto de más de 50 MP se rechaza (`IMAGE_TOO_LARGE`) leyendo solo su cabecera, y una página de PDF anormalmente grande se rasteriza a menos DPI (máx. 25 MP), para que un archivo pequeño que declara dimensiones enormes no agote la memoria.
+* **Contraseñas**: 8 caracteres como mínimo, con letra y dígito, y como máximo 72 **bytes** en UTF-8 (límite de BCrypt; una tilde o una ñ ocupan 2).
+* **Logs sin datos personales**: los logs usan ids; el driver de PostgreSQL no incluye el `DETAIL` de los errores (`logServerErrorDetail=false`, que contendría valores como correos) y una violación de integridad solo registra el nombre de la restricción.
 * **CORS**: solo los orígenes de `CORS_ALLOWED_ORIGINS`, sin cookies (Bearer). Expone `Content-Disposition` y `Retry-After` para las descargas y el 429.
 * Recuperación de contraseña: código de 6 dígitos guardado como hash BCrypt, 15 min de vigencia, 5 intentos; `forgot-password` responde igual exista o no el correo. Con `MAIL_ENABLED=false` no se envía nada ni se registra el código.
 
@@ -157,3 +167,40 @@ Errores: `{timestamp, status, code, message, path[, errors]}` (sin trazas).
 * Instituciones y multi-tenant (el diseño no lo impide).
 * Lectura OMR: probada con hojas generadas (rotadas, boca abajo, con sombra/ruido/desenfoque) pero no con fotos reales de papel impreso; conviene calibrar `edusistem.omr.*` con muestras reales. No corrige distorsión de lente ni pliegues, y no aplica la orientación EXIF de la cámara (la detección de marcadores tolera giros).
 * El almacenamiento es un directorio local (`STORAGE_PATH`).
+
+## Puesta en producción
+
+Lista de comprobación (la app avisa al arrancar de las que puede detectar):
+
+1. **Secretos**: `JWT_SECRET` aleatorio (`openssl rand -base64 48`; la app no arranca con el valor de ejemplo),
+   `STORAGE_ENCRYPTION_KEY` (`openssl rand -base64 32`) y `DB_PASSWORD` en un gestor de secretos o variables del
+   sistema, nunca en el repositorio. La clave de cifrado y la frase de los backups se guardan también fuera del servidor.
+2. **HTTPS**: la app habla HTTP; ponla detrás de un proxy inverso (nginx, Caddy, balanceador) que termine TLS y
+   redirija HTTP→HTTPS, con `FORWARD_HEADERS_STRATEGY=native`. El puerto de la app no debe ser accesible desde fuera.
+3. `API_DOCS_ENABLED=false`, `CORS_ALLOWED_ORIGINS` solo con los orígenes reales del frontend, `MAIL_ENABLED=true`
+   con un SMTP real (sin él no hay recuperación de contraseña).
+4. **Base de datos**: usuario propio sin privilegios de superusuario, sin acceso público a su puerto.
+5. **Backups** diarios y copia fuera del servidor (ver abajo); ensaya una restauración antes del lanzamiento.
+6. **Una sola instancia** por ahora. Los límites de peticiones ya son comunes (van en la base), pero `STORAGE_PATH`
+   es disco local y cada instancia, al arrancar, retoma *todos* los lotes de PDF sin terminar, incluidos los que otra
+   esté procesando. Escalar a varias exige un volumen compartido y coordinar esa recuperación.
+
+## Backups
+
+`scripts/backup.sh` genera, cifrados con GPG (AES-256, frase en `BACKUP_PASSPHRASE_FILE`), un `pg_dump` de la base y
+un `tar` de `STORAGE_PATH`, con su `sha256`, y borra los locales de más de `BACKUP_RETENTION_DAYS` (14) días.
+`scripts/restore.sh` los restaura (pide confirmación y sobrescribe la base y la carpeta). Las instrucciones y el cron
+de ejemplo están al principio de cada script.
+
+```bash
+export PGHOST=localhost PGDATABASE=edusistem PGUSER=edusistem PGPASSWORD=... BACKUP_PASSPHRASE_FILE=/etc/edusistem/backup.pass
+./scripts/backup.sh                                   # → backups/edusistem-db-<fecha>.dump.gpg y edusistem-storage-<fecha>.tar.gz.gpg
+./scripts/restore.sh backups/edusistem-db-<fecha>.dump.gpg backups/edusistem-storage-<fecha>.tar.gz.gpg
+```
+
+* Copia `backups/` fuera del servidor (otro proveedor o región: `rclone`, `aws s3 sync`, `restic`...). Un backup en
+  el mismo disco no protege de perder el servidor.
+* Los archivos cifrados por la app siguen cifrados dentro del backup: para restaurarlos hace falta la misma
+  `STORAGE_ENCRYPTION_KEY`.
+* Un profesor o estudiante eliminado sigue en los backups hasta que estos caducan (14 días en local; aplica la misma
+  retención a las copias externas).

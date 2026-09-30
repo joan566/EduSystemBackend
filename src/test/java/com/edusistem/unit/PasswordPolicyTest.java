@@ -20,4 +20,11 @@ class PasswordPolicyTest {
             assertThatThrownBy(() -> PasswordPolicy.validate(bad)).isInstanceOf(InvalidRequestException.class);
         }
     }
+
+    @Test
+    void limitsTheLengthInUtf8BytesBecauseBcryptIgnoresEverythingAfter72() {
+        assertThatCode(() -> PasswordPolicy.validate("ñ1".repeat(24))).doesNotThrowAnyException(); // 72 bytes
+        assertThatThrownBy(() -> PasswordPolicy.validate("ñ1".repeat(25))) // 50 caracteres, 75 bytes
+                .isInstanceOf(InvalidRequestException.class);
+    }
 }

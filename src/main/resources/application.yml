@@ -9,6 +9,11 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/edusystem}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      data-source-properties:
+        # Quita el DETAIL de PostgreSQL de los mensajes de error ("Key (email)=(x@y.com) already exists"...), que
+        # acabaría en los logs y las trazas con datos personales.
+        logServerErrorDetail: false
   jpa:
     open-in-view: false
     hibernate:
@@ -70,6 +75,13 @@ edusistem:
     timezone: ${SCHOOL_TIMEZONE:America/Bogota}
   storage:
     base-path: ${STORAGE_PATH:./storage}
+    # Clave AES-256 en Base64 (openssl rand -base64 32) para cifrar fotos de hojas, PDF y Excel guardados. Vacía = sin
+    # cifrar. Si se pierde, los archivos cifrados no se pueden recuperar: guárdala aparte de los backups.
+    encryption-key: ${STORAGE_ENCRYPTION_KEY:}
+  audit:
+    # Días que se conserva la auditoría de los profesores y la de intentos sin usuario (guardan el correo escrito)
+    retention-days: ${AUDIT_RETENTION_DAYS:730}
+    anonymous-retention-days: ${AUDIT_ANONYMOUS_RETENTION_DAYS:30}
   mail:
     enabled: ${MAIL_ENABLED:false}
     from: ${MAIL_FROM:no-reply@edusistem.local}

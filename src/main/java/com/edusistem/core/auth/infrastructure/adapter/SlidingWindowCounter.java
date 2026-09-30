@@ -2,93 +2,95 @@ package com.edusistem.core.auth.infrastructure.adapter;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Contador en memoria de eventos por clave dentro de una ventana deslizante fija. Es por instancia (suficiente para un
- * monolito de un solo nodo; con varios nodos habría que moverlo a un almacén común).
+ * Contador de eventos por clave dentro de una ventana deslizante, guardado en {@code rate_limit_events} para que sea
+ * común a todas las instancias y sobreviva a reinicios. Cada operación va en su propia transacción: un intento fallido
+ * debe contar aunque la petición que lo registra termine en error y haga rollback.
  */
-final class SlidingWindowCounter {
+@Component
+class SlidingWindowCounter {
 
-    private static final int PURGE_THRESHOLD = 10_000;
+    /** Mayor ventana admitida; los eventos más antiguos se purgan. */
+    static final Duration MAX_WINDOW = Duration.ofDays(2);
+    /** Espacio propio de pg_advisory_xact_lock para no chocar con otros bloqueos consultivos. */
+    private static final int LOCK_NAMESPACE = 0x45445553;
 
-    private final Map<String, Deque<Instant>> events = new ConcurrentHashMap<>();
+    private final JdbcTemplate jdbc;
+    private final TransactionTemplate tx;
     private final Clock clock;
-    private final Duration window;
 
-    SlidingWindowCounter(Clock clock, Duration window) {
+    SlidingWindowCounter(JdbcTemplate jdbc, PlatformTransactionManager transactionManager, Clock clock) {
+        this.jdbc = jdbc;
+        this.tx = new TransactionTemplate(transactionManager);
+        this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.clock = clock;
-        this.window = window;
     }
 
     /** Segundos que faltan para que la clave vuelva a estar por debajo de {@code max}; 0 si ya lo está. */
-    long retryAfterSeconds(String key, int max) {
-        Deque<Instant> timestamps = events.get(key);
-        if (timestamps == null) {
-            return 0;
-        }
-        synchronized (timestamps) {
-            prune(timestamps);
-            return retryAfter(timestamps, max);
-        }
+    long retryAfterSeconds(String key, int max, Duration window) {
+        return tx.execute(status -> retryAfter(key, max, window, now()));
     }
 
     void record(String key) {
-        Deque<Instant> timestamps = events.computeIfAbsent(key, k -> new ArrayDeque<>());
-        synchronized (timestamps) {
-            prune(timestamps);
-            timestamps.addLast(clock.instant());
-        }
-        purgeIfLarge();
+        tx.executeWithoutResult(status -> insert(key, now()));
     }
 
-    /** Comprueba y registra de forma atómica: solo registra si la clave está por debajo de {@code max}. */
-    long tryRecord(String key, int max) {
-        Deque<Instant> timestamps = events.computeIfAbsent(key, k -> new ArrayDeque<>());
-        long retryAfter;
-        synchronized (timestamps) {
-            prune(timestamps);
-            retryAfter = retryAfter(timestamps, max);
+    /** Comprueba y registra de forma atómica (bloqueo por clave): solo registra si está por debajo de {@code max}. */
+    long tryRecord(String key, int max, Duration window) {
+        return tx.execute(status -> {
+            jdbc.query("select pg_advisory_xact_lock(?, hashtext(?))", rs -> null, LOCK_NAMESPACE, key);
+            LocalDateTime now = now();
+            long retryAfter = retryAfter(key, max, window, now);
             if (retryAfter == 0) {
-                timestamps.addLast(clock.instant());
+                insert(key, now);
             }
-        }
-        purgeIfLarge();
-        return retryAfter;
+            return retryAfter;
+        });
     }
 
     void reset(String key) {
-        events.remove(key);
+        tx.executeWithoutResult(status -> jdbc.update("delete from rate_limit_events where bucket = ?", key));
     }
 
-    private long retryAfter(Deque<Instant> timestamps, int max) {
-        if (timestamps.size() < max) {
+    @Scheduled(cron = "0 15 * * * *")
+    public void purge() {
+        tx.executeWithoutResult(status -> jdbc.update("delete from rate_limit_events where occurred_at < ?",
+                now().minus(MAX_WINDOW)));
+    }
+
+    private long retryAfter(String key, int max, Duration window, LocalDateTime now) {
+        if (window.compareTo(MAX_WINDOW) > 0) {
+            throw new IllegalArgumentException("Rate limit windows longer than " + MAX_WINDOW + " are not supported");
+        }
+        Window current = jdbc.queryForObject("select count(*) as total, min(occurred_at) as oldest "
+                        + "from rate_limit_events where bucket = ? and occurred_at > ?",
+                (rs, n) -> new Window(rs.getLong("total"), rs.getObject("oldest", LocalDateTime.class)),
+                key, now.minus(window));
+        if (current.total() < max) {
             return 0;
         }
-        long seconds = Duration.between(clock.instant(), timestamps.peekFirst().plus(window)).getSeconds();
+        LocalDateTime oldest = current.oldest();
+        long seconds = Duration.between(now, oldest.plus(window)).getSeconds();
         return Math.max(1, seconds + 1);
     }
 
-    private void prune(Deque<Instant> timestamps) {
-        Instant limit = clock.instant().minus(window);
-        while (!timestamps.isEmpty() && timestamps.peekFirst().isBefore(limit)) {
-            timestamps.pollFirst();
-        }
+    private void insert(String key, LocalDateTime now) {
+        jdbc.update("insert into rate_limit_events (bucket, occurred_at) values (?, ?)", key, now);
     }
 
-    private void purgeIfLarge() {
-        if (events.size() <= PURGE_THRESHOLD) {
-            return;
-        }
-        events.entrySet().removeIf(e -> {
-            synchronized (e.getValue()) {
-                prune(e.getValue());
-                return e.getValue().isEmpty();
-            }
-        });
+    private record Window(long total, LocalDateTime oldest) {
+    }
+
+    private LocalDateTime now() {
+        return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
     }
 }

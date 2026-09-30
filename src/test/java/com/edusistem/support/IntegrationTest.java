@@ -69,6 +69,8 @@ public abstract class IntegrationTest {
         registry.add("edusistem.cors.allowed-origins", () -> "http://localhost:3000,https://*.edusistem.test");
         Path storage = Files.createTempDirectory("edusistem-test-storage");
         registry.add("edusistem.storage.base-path", storage::toString);
+        // Los tests guardan los archivos cifrados, como en producción
+        registry.add("edusistem.storage.encryption-key", () -> "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=");
     }
 
     @Autowired

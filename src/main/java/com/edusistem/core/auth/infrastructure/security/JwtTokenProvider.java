@@ -29,6 +29,10 @@ public class JwtTokenProvider implements TokenIssuerPort {
         if (secret.length < 32) {
             throw new IllegalStateException("JWT_SECRET must be at least 32 characters long");
         }
+        if (properties.secret().contains("change-me")) {
+            throw new IllegalStateException("JWT_SECRET still has the example value from .env.example; "
+                    + "generate a random one (e.g. openssl rand -base64 48)");
+        }
         this.key = Keys.hmacShaKeyFor(secret);
         this.expirationSeconds = properties.expirationSeconds();
     }

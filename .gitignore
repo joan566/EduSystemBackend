@@ -4,3 +4,4 @@ storage/
 *.iml
 .idea/
 .vscode/
+backups/

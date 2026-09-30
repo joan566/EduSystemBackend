@@ -115,7 +115,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<ErrorResponse> handleIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
-        log.warn("Data integrity violation at {}: {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+        // Solo el nombre de la restricción: el mensaje de la base puede incluir valores (correos, identificaciones...).
+        log.warn("Data integrity violation at {} (constraint {})", request.getRequestURI(), constraintName(ex));
         return build(HttpStatus.CONFLICT, "DATA_INTEGRITY_VIOLATION",
                 "The operation conflicts with existing data", request, null);
     }
@@ -124,6 +125,15 @@ public class GlobalExceptionHandler {
     ResponseEntity<ErrorResponse> handleUnexpected(Exception ex, HttpServletRequest request) {
         log.error("Unexpected error at {} {}", request.getMethod(), request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "An unexpected error occurred", request, null);
+    }
+
+    private static String constraintName(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof org.hibernate.exception.ConstraintViolationException c && c.getConstraintName() != null) {
+                return c.getConstraintName();
+            }
+        }
+        return "unknown";
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String code, String message,
