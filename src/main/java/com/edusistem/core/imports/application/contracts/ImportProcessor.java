@@ -1,5 +1,6 @@
 package com.edusistem.core.imports.application.contracts;
 
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
 import com.edusistem.core.imports.domain.enums.ImportType;
 
@@ -11,5 +12,6 @@ public interface ImportProcessor {
 
     ImportType type();
 
-    ImportOutcome process(ImportBatch batch, byte[] content);
+    /** Informa en {@code progress} el total de filas al leer el archivo, cada hoja que empieza y cada fila. */
+    ImportOutcome process(ImportBatch batch, byte[] content, ImportProgress progress);
 }

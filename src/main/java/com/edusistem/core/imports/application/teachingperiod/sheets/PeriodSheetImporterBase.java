@@ -34,8 +34,14 @@ abstract class PeriodSheetImporterBase implements TeachingPeriodSheetImporter {
             return 0;
         }
         SheetColumns.require(sheet.get(), spec, requiredColumns);
+        context.progress().step(spec.label());
         importRows(context, sheet.get());
         return sheet.get().rows().size();
+    }
+
+    @Override
+    public final int rowCount(TeachingPeriodImportContext context) {
+        return context.workbook().sheet(spec).map(s -> s.rows().size()).orElse(0);
     }
 
     protected abstract void importRows(TeachingPeriodImportContext context, ParsedSheet sheet);
@@ -44,7 +50,9 @@ abstract class PeriodSheetImporterBase implements TeachingPeriodSheetImporter {
         return spec;
     }
 
+    /** Se pide una vez por fila: también cuenta la fila en el avance. */
     protected final RowReader reader(TeachingPeriodImportContext context, SpreadsheetRow row) {
+        context.progress().tick();
         return RowReader.of(row, spec, context.errors());
     }
 

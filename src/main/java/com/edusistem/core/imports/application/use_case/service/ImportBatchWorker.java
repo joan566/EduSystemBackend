@@ -3,6 +3,7 @@ package com.edusistem.core.imports.application.use_case.service;
 import com.edusistem.core.imports.application.contracts.ImportBatchTracker;
 import com.edusistem.core.imports.application.contracts.ImportProcessor;
 import com.edusistem.core.imports.application.support.ImportMessages;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
 import com.edusistem.core.imports.domain.enums.ImportType;
 import com.edusistem.core.imports.domain.inputports.ProcessImportBatchUseCase;
@@ -71,7 +72,7 @@ public class ImportBatchWorker implements ProcessImportBatchUseCase {
                 throw new IllegalStateException("No import processor for " + batch.getImportType());
             }
             byte[] content = storage.read(batch.getFilePath());
-            tracker.complete(batch, processor.process(batch, content));
+            tracker.complete(batch, processor.process(batch, content, new ImportProgress(batch, batches, clock)));
         } catch (DomainException e) {
             tracker.fail(batch, e.getCode(), e.getMessage());
         } catch (IOException e) {

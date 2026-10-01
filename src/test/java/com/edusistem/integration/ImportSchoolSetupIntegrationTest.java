@@ -118,6 +118,8 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("failedRows").asInt()).isZero();
         assertThat(result.get("totalRows").asInt()).isEqualTo(9);
+        assertThat(result.get("processedRows").asInt()).isEqualTo(9);
+        assertThat(result.get("progressPercent").asInt()).isEqualTo(100);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(9);
 
         long periodId = findByName(t, "/api/v1/academic-periods?size=100", "name", periodName);

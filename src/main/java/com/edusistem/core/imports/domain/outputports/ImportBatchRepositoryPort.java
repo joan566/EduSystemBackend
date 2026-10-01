@@ -14,6 +14,12 @@ public interface ImportBatchRepositoryPort {
 
     Optional<ImportBatch> findById(Long id);
 
+    /**
+     * Registra el avance de una importación en curso sin tocar el resto del batch. Se confirma de inmediato (aunque
+     * quien lo llame esté dentro de otra transacción) para que el cliente lo vea mientras corre.
+     */
+    void updateProgress(Long id, int processedRows, int totalRows, String currentStep);
+
     PageResult<ImportBatch> findByUserId(Long userId, PageQuery page);
 
     /** Importaciones terminadas antes de {@code cutoff} que aún conservan el Excel o el informe de errores. */

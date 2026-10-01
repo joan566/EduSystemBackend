@@ -50,6 +50,12 @@ public class ImportBatchEntity extends CreatedAtEntity {
     @Column(name = "total_rows")
     private Integer totalRows;
 
+    @Column(name = "processed_rows")
+    private Integer processedRows;
+
+    @Column(name = "current_step", length = 100)
+    private String currentStep;
+
     @Column(name = "successful_rows")
     private Integer successfulRows;
 

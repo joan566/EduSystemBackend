@@ -50,6 +50,8 @@ public class DefaultImportBatchTracker implements ImportBatchTracker {
         int failedRows = outcome.failedRows();
         List<ImportRowError> errors = outcome.errors();
         batch.setTotalRows(total);
+        batch.setProcessedRows(total);
+        batch.setCurrentStep(null);
         batch.setSuccessfulRows(successful);
         batch.setFailedRows(failedRows);
         batch.setStatus(failedRows == 0 ? ImportStatus.COMPLETED

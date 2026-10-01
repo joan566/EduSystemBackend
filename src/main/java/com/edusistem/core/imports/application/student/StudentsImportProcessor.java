@@ -10,6 +10,7 @@ import com.edusistem.core.academic.domain.outputports.GroupRepositoryPort;
 import com.edusistem.core.imports.application.contracts.ImportOutcome;
 import com.edusistem.core.imports.application.contracts.ImportProcessor;
 import com.edusistem.core.imports.application.support.ImportMessages;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.application.support.RowErrors;
 import com.edusistem.core.imports.application.support.RowReader;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
@@ -61,15 +62,17 @@ public class StudentsImportProcessor implements ImportProcessor {
     }
 
     @Override
-    public ImportOutcome process(ImportBatch batch, byte[] content) {
+    public ImportOutcome process(ImportBatch batch, byte[] content, ImportProgress progress) {
         Long teacherId = batch.getUserId();
         ParsedSheet sheet = reader.read(content).canonicalize(SHEET);
         requireColumns(sheet);
         if (sheet.rows().size() > MAX_ROWS) {
             throw new InvalidRequestException("TOO_MANY_ROWS", ImportMessages.tooManyRows(MAX_ROWS));
         }
+        progress.start(sheet.rows().size());
+        progress.step(SHEET.label());
         RowErrors errors = new RowErrors();
-        List<StudentImportRow> valid = validate(teacherId, sheet.rows(), errors);
+        List<StudentImportRow> valid = validate(teacherId, sheet.rows(), errors, progress);
         applier.apply(teacherId, valid);
         // una fila puede tener varios errores: cuenta una vez
         int failedRows = (int) errors.list().stream().map(ImportRowError::rowNumber).distinct().count();
@@ -87,7 +90,8 @@ public class StudentsImportProcessor implements ImportProcessor {
         }
     }
 
-    private List<StudentImportRow> validate(Long teacherId, List<SpreadsheetRow> rows, RowErrors errors) {
+    private List<StudentImportRow> validate(Long teacherId, List<SpreadsheetRow> rows, RowErrors errors,
+                                            ImportProgress progress) {
         List<StudentImportRow> valid = new ArrayList<>();
         Map<String, Integer> seenIdentifications = new HashMap<>();
         Map<String, Integer> seenCodes = new HashMap<>();
@@ -95,6 +99,7 @@ public class StudentsImportProcessor implements ImportProcessor {
         int currentYear = LocalDateTime.now(clock).getYear();
 
         for (SpreadsheetRow sheetRow : rows) {
+            progress.tick();
             RowReader row = RowReader.headerOnly(sheetRow, SHEET, errors);
             int before = errors.size();
             String identification = row.required("identification_number", 50);

@@ -18,4 +18,7 @@ public interface SchoolSetupSheetImporter {
      * @return cantidad de filas de la hoja (0 si el libro no la trae)
      */
     int importSheet(SchoolSetupImportContext context);
+
+    /** Filas que trae la hoja (0 si el libro no la trae), para el total del avance. */
+    int rowCount(SchoolSetupImportContext context);
 }

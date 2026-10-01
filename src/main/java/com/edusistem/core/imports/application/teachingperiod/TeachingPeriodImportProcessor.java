@@ -7,6 +7,7 @@ import com.edusistem.core.imports.application.contracts.ImportProcessor;
 import com.edusistem.core.imports.application.contracts.StudentRoster;
 import com.edusistem.core.imports.application.contracts.TeachingPeriodSheetImporter;
 import com.edusistem.core.imports.application.support.ImportMessages;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
 import com.edusistem.core.imports.domain.enums.ImportType;
 import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
@@ -44,14 +45,15 @@ public class TeachingPeriodImportProcessor implements ImportProcessor {
     }
 
     @Override
-    public ImportOutcome process(ImportBatch batch, byte[] content) {
+    public ImportOutcome process(ImportBatch batch, byte[] content, ImportProgress progress) {
         Long teachingPeriodId = batch.getTeachingPeriodId();
         // la propiedad se comprobó al encolar; aquí solo puede faltar si se borró mientras esperaba
         TeachingPeriodView period = teachingPeriods.findViewById(teachingPeriodId)
                 .orElseThrow(() -> new ResourceNotFoundException("RESOURCE_NOT_FOUND",
                         ImportMessages.TEACHING_PERIOD_DELETED));
         TeachingPeriodImportContext context = new TeachingPeriodImportContext(batch.getUserId(), teachingPeriodId,
-                period.groupId(), reader.readAll(content), roster);
+                period.groupId(), reader.readAll(content), roster, progress);
+        progress.start(importers.stream().mapToInt(i -> i.rowCount(context)).sum());
         int totalRows = 0;
         for (TeachingPeriodSheetImporter importer : importers) {
             totalRows += importer.importSheet(context);

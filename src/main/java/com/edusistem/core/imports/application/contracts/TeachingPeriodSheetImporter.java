@@ -15,4 +15,7 @@ public interface TeachingPeriodSheetImporter {
      * @return cantidad de filas de la hoja (0 si el libro no la trae)
      */
     int importSheet(TeachingPeriodImportContext context);
+
+    /** Filas que trae la hoja (0 si el libro no la trae), para el total del avance. */
+    int rowCount(TeachingPeriodImportContext context);
 }

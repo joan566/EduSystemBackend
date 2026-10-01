@@ -1,6 +1,7 @@
 package com.edusistem.core.imports.application.teachingperiod;
 
 import com.edusistem.core.imports.application.contracts.StudentRoster;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.application.support.RowErrors;
 import com.edusistem.core.imports.domain.vo.ParsedWorkbook;
 import java.util.Map;
@@ -13,16 +14,18 @@ public final class TeachingPeriodImportContext {
     private final Long groupId;
     private final ParsedWorkbook workbook;
     private final StudentRoster roster;
+    private final ImportProgress progress;
     private final RowErrors errors = new RowErrors();
     private Map<String, Long> studentIdByIdentification;
 
     public TeachingPeriodImportContext(Long teacherId, Long teachingPeriodId, Long groupId, ParsedWorkbook workbook,
-                                       StudentRoster roster) {
+                                       StudentRoster roster, ImportProgress progress) {
         this.teacherId = teacherId;
         this.teachingPeriodId = teachingPeriodId;
         this.groupId = groupId;
         this.workbook = workbook;
         this.roster = roster;
+        this.progress = progress;
     }
 
     public Long teacherId() {
@@ -43,6 +46,10 @@ public final class TeachingPeriodImportContext {
 
     public RowErrors errors() {
         return errors;
+    }
+
+    public ImportProgress progress() {
+        return progress;
     }
 
     /**

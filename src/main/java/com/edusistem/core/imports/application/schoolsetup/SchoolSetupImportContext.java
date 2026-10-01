@@ -4,6 +4,7 @@ import com.edusistem.core.activity.domain.vo.ActivityView;
 import com.edusistem.core.attendance.domain.vo.AttendanceSessionView;
 import com.edusistem.core.imports.application.contracts.StudentRoster;
 import com.edusistem.core.imports.application.contracts.TeachingPeriodCatalog;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.application.support.RowErrors;
 import com.edusistem.core.imports.domain.vo.ParsedWorkbook;
 import java.math.BigDecimal;
@@ -25,15 +26,17 @@ public final class SchoolSetupImportContext {
 
     private final Long teacherId;
     private final ParsedWorkbook workbook;
+    private final ImportProgress progress;
     private final RowErrors errors = new RowErrors();
     private final Map<ClassKey, Long> teachingPeriodByClass = new HashMap<>();
     private final Map<Long, Map<String, ActivityRef>> activityByPeriodThenName = new HashMap<>();
     private final Map<Long, Map<String, Long>> studentByPeriodThenIdentification = new HashMap<>();
     private final Map<Long, Map<LocalDate, Long>> sessionByPeriodThenDate = new HashMap<>();
 
-    public SchoolSetupImportContext(Long teacherId, ParsedWorkbook workbook) {
+    public SchoolSetupImportContext(Long teacherId, ParsedWorkbook workbook, ImportProgress progress) {
         this.teacherId = teacherId;
         this.workbook = workbook;
+        this.progress = progress;
     }
 
     public Long teacherId() {
@@ -46,6 +49,10 @@ public final class SchoolSetupImportContext {
 
     public RowErrors errors() {
         return errors;
+    }
+
+    public ImportProgress progress() {
+        return progress;
     }
 
     public Optional<Long> knownTeachingPeriod(ClassKey key) {

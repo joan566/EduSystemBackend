@@ -3,6 +3,7 @@ package com.edusistem.core.imports.application.schoolsetup;
 import com.edusistem.core.imports.application.contracts.ImportOutcome;
 import com.edusistem.core.imports.application.contracts.ImportProcessor;
 import com.edusistem.core.imports.application.contracts.SchoolSetupSheetImporter;
+import com.edusistem.core.imports.application.support.ImportProgress;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
 import com.edusistem.core.imports.domain.enums.ImportType;
 import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
@@ -32,8 +33,10 @@ public class SchoolSetupImportProcessor implements ImportProcessor {
     }
 
     @Override
-    public ImportOutcome process(ImportBatch batch, byte[] content) {
-        SchoolSetupImportContext context = new SchoolSetupImportContext(batch.getUserId(), reader.readAll(content));
+    public ImportOutcome process(ImportBatch batch, byte[] content, ImportProgress progress) {
+        SchoolSetupImportContext context = new SchoolSetupImportContext(batch.getUserId(), reader.readAll(content),
+                progress);
+        progress.start(importers.stream().mapToInt(i -> i.rowCount(context)).sum());
         int totalRows = 0;
         for (SchoolSetupSheetImporter importer : importers) {
             totalRows += importer.importSheet(context);

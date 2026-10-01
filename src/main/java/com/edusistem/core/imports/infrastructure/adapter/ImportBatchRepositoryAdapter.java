@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 @Component
 public class ImportBatchRepositoryAdapter implements ImportBatchRepositoryPort {
@@ -41,6 +43,12 @@ public class ImportBatchRepositoryAdapter implements ImportBatchRepositoryPort {
     @Override
     public Optional<ImportBatch> findById(Long id) {
         return repository.findById(id).map(mapper::toDomain);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateProgress(Long id, int processedRows, int totalRows, String currentStep) {
+        repository.updateProgress(id, processedRows, totalRows, currentStep);
     }
 
     @Override

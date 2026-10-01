@@ -25,7 +25,12 @@ public class ImportBatch {
     private String fileName;
     private String filePath;
     private ImportStatus status;
+    /** Se fija al leer el archivo, antes de procesarlo; el total definitivo queda al terminar. */
     private Integer totalRows;
+    /** Filas ya recorridas mientras corre (ver {@code ImportProgress}). */
+    private Integer processedRows;
+    /** Hoja que se está procesando; nula al terminar. */
+    private String currentStep;
     private Integer successfulRows;
     private Integer failedRows;
     private String errorReportPath;
@@ -42,15 +47,30 @@ public class ImportBatch {
 
     public void start(LocalDateTime now) {
         status = ImportStatus.PROCESSING;
+        // reanudar tras un reinicio vuelve a recorrer el archivo desde el principio
+        processedRows = 0;
+        currentStep = null;
         if (startedAt == null) {
             startedAt = now;
         }
+    }
+
+    /** Parte de 100 recorrida; 100 si ya terminó (también si falló). */
+    public int progressPercent() {
+        if (isFinished()) {
+            return 100;
+        }
+        if (totalRows == null || totalRows == 0 || processedRows == null) {
+            return 0;
+        }
+        return Math.min(100, processedRows * 100 / totalRows);
     }
 
     public void fail(String code, String message, LocalDateTime now) {
         status = ImportStatus.FAILED;
         errorCode = code;
         errorMessage = message;
+        currentStep = null;
         completedAt = now;
     }
 }

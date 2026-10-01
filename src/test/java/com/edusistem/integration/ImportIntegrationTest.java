@@ -269,11 +269,15 @@ class ImportIntegrationTest extends IntegrationTest {
         assertThat(accepted.get("status").asText()).isEqualTo("QUEUED");
         assertThat(accepted.get("type").asText()).isEqualTo("STUDENTS");
         assertThat(accepted.get("totalRows").isNull()).isTrue();
+        assertThat(accepted.get("progressPercent").asInt()).isZero();
 
         JsonNode done = awaitImport(t, accepted.get("id").asLong());
         assertThat(done.get("status").asText()).isEqualTo("COMPLETED");
         assertThat(done.get("startedAt").isNull()).isFalse();
         assertThat(done.get("errorsTruncated").asBoolean()).isFalse();
+        assertThat(done.get("progressPercent").asInt()).isEqualTo(100);
+        assertThat(done.get("processedRows").asInt()).isEqualTo(1);
+        assertThat(done.get("currentStep").isNull()).isTrue();
     }
 
     @Test
