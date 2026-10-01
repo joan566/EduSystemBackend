@@ -19,6 +19,7 @@ import com.edusistem.core.exam.domain.service.ExamScorer;
 import com.edusistem.core.exam.domain.vo.AnswerSheetLayout;
 import com.edusistem.core.exam.domain.vo.BubbleReading;
 import com.edusistem.core.exam.domain.vo.DetectedAnswer;
+import com.edusistem.core.exam.domain.vo.ImageFormat;
 import com.edusistem.core.exam.domain.vo.QrPayload;
 import com.edusistem.core.exam.domain.vo.SubmissionDetails;
 import com.edusistem.core.grading.domain.entity.GradingScale;
@@ -171,9 +172,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
         submission.setScore(score);
         submission.setFinalGrade(scale.convert(score, maximumScore));
         submission.setProcessedAt(now);
-        long toReview = answers.stream().filter(ExamAnswer::needsReview).count();
-        submission.setStatus(toReview > 0 ? ExamSubmissionStatus.REVIEW_REQUIRED : ExamSubmissionStatus.PROCESSED);
-        submission.setStatusDetail(toReview > 0 ? toReview + " answer(s) require manual review" : null);
+        submission.refreshReviewStatus();
     }
 
     private Student identifyStudent(SubmissionCommands.Submit command, ExamContext ctx, String qrText) {
@@ -203,9 +202,7 @@ public class SubmissionProcessingService implements SubmitAnswerSheetUseCase {
     }
 
     private static void requireImage(byte[] image) {
-        boolean png = image != null && image.length > 8 && (image[0] & 0xFF) == 0x89 && image[1] == 'P' && image[2] == 'N';
-        boolean jpeg = image != null && image.length > 3 && (image[0] & 0xFF) == 0xFF && (image[1] & 0xFF) == 0xD8;
-        if (!png && !jpeg) {
+        if (ImageFormat.detect(image).isEmpty()) {
             throw new InvalidRequestException("INVALID_IMAGE", "Only non-empty JPEG or PNG images are supported");
         }
     }

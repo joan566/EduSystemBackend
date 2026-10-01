@@ -131,8 +131,8 @@ final class QuestionBookletWriter {
 
     private float drawContinuationHeader(PDPageContentStream cs, QuestionBookletData data) throws IOException {
         String right = "Cuadernillo de preguntas";
-        float rightWidth = width(body, 7.5f, right);
-        text(cs, body, 7.5f, MUTED, LEFT, 44, fit(data.examName(), body, 7.5f, RIGHT - LEFT - rightWidth - 20));
+        float rightWidth = PdfPrimitives.width(body, 7.5f, right);
+        text(cs, body, 7.5f, MUTED, LEFT, 44, PdfPrimitives.fit(data.examName(), body, 7.5f, RIGHT - LEFT - rightWidth - 20));
         text(cs, body, 7.5f, MUTED, RIGHT - rightWidth, 44, right);
         cs.setStrokingColor(RULE);
         cs.setLineWidth(0.5f);
@@ -152,7 +152,7 @@ final class QuestionBookletWriter {
             String line = statement.get(i);
             List<Piece> pieces = new ArrayList<>();
             if (i == 0) {
-                pieces.add((cs, y) -> text(cs, bold, BODY_SIZE, INK, STATEMENT_X - 6 - width(bold, BODY_SIZE, number), y,
+                pieces.add((cs, y) -> text(cs, bold, BODY_SIZE, INK, STATEMENT_X - 6 - PdfPrimitives.width(bold, BODY_SIZE, number), y,
                         number));
             }
             pieces.add((cs, y) -> text(cs, body, BODY_SIZE, INK, STATEMENT_X, y, line));
@@ -204,7 +204,7 @@ final class QuestionBookletWriter {
             if (text.contains("\n")) {
                 return 1;
             }
-            widest = Math.max(widest, width(body, BODY_SIZE, text));
+            widest = Math.max(widest, PdfPrimitives.width(body, BODY_SIZE, text));
         }
         float needed = OPTION_INDENT + widest + 22;
         float available = RIGHT - STATEMENT_X;
@@ -220,7 +220,7 @@ final class QuestionBookletWriter {
         float cy = baseline - 3.4f;
         cs.setStrokingColor(0.35f);
         cs.setLineWidth(0.7f);
-        circle(cs, cx, PAGE_H - cy, OPTION_BUBBLE_R);
+        PdfPrimitives.circle(cs, cx, PAGE_H - cy, OPTION_BUBBLE_R);
         cs.stroke();
         centered(cs, bold, 6.5f, INK, cx, cy + 2.3f, letter);
     }
@@ -243,12 +243,12 @@ final class QuestionBookletWriter {
         List<String> lines = new ArrayList<>();
         for (String paragraph : (value == null ? "" : value).split("\\R")) {
             StringBuilder line = new StringBuilder();
-            for (String word : PdfAnswerSheetRenderer.sanitize(font, paragraph).strip().split(" +")) {
+            for (String word : PdfPrimitives.sanitize(font, paragraph).strip().split(" +")) {
                 if (word.isEmpty()) {
                     continue;
                 }
                 String candidate = line.isEmpty() ? word : line + " " + word;
-                if (width(font, size, candidate) <= maxWidth) {
+                if (PdfPrimitives.width(font, size, candidate) <= maxWidth) {
                     line.setLength(0);
                     line.append(candidate);
                     continue;
@@ -257,9 +257,9 @@ final class QuestionBookletWriter {
                     lines.add(line.toString());
                     line.setLength(0);
                 }
-                while (word.length() > 1 && width(font, size, word) > maxWidth) {
+                while (word.length() > 1 && PdfPrimitives.width(font, size, word) > maxWidth) {
                     int cut = word.length() - 1;
-                    while (cut > 1 && width(font, size, word.substring(0, cut)) > maxWidth) {
+                    while (cut > 1 && PdfPrimitives.width(font, size, word.substring(0, cut)) > maxWidth) {
                         cut--;
                     }
                     lines.add(word.substring(0, cut));
@@ -272,44 +272,14 @@ final class QuestionBookletWriter {
         return lines;
     }
 
-    private static String fit(String value, PDFont font, float size, float maxWidth) throws IOException {
-        String clean = PdfAnswerSheetRenderer.sanitize(font, value).strip();
-        if (width(font, size, clean) <= maxWidth) {
-            return clean;
-        }
-        while (clean.length() > 1 && width(font, size, clean.strip() + "…") > maxWidth) {
-            clean = clean.substring(0, clean.length() - 1);
-        }
-        return clean.strip() + "…";
-    }
-
     private static void text(PDPageContentStream cs, PDFont font, float size, float gray, float x, float yTop,
                              String value) throws IOException {
-        cs.beginText();
-        cs.setNonStrokingColor(gray);
-        cs.setFont(font, size);
-        cs.newLineAtOffset(x, PAGE_H - yTop);
-        cs.showText(PdfAnswerSheetRenderer.sanitize(font, value));
-        cs.endText();
+        PdfPrimitives.text(cs, font, size, gray, x, PAGE_H - yTop, value);
     }
 
     private static void centered(PDPageContentStream cs, PDFont font, float size, float gray, float centerX, float yTop,
                                  String value) throws IOException {
-        text(cs, font, size, gray, centerX - width(font, size, value) / 2, yTop, value);
-    }
-
-    private static float width(PDFont font, float size, String value) throws IOException {
-        return font.getStringWidth(PdfAnswerSheetRenderer.sanitize(font, value)) / 1000 * size;
-    }
-
-    private static void circle(PDPageContentStream cs, float cx, float cy, float r) throws IOException {
-        float k = 0.5523f * r;
-        cs.moveTo(cx + r, cy);
-        cs.curveTo(cx + r, cy + k, cx + k, cy + r, cx, cy + r);
-        cs.curveTo(cx - k, cy + r, cx - r, cy + k, cx - r, cy);
-        cs.curveTo(cx - r, cy - k, cx - k, cy - r, cx, cy - r);
-        cs.curveTo(cx + k, cy - r, cx + r, cy - k, cx + r, cy);
-        cs.closePath();
+        text(cs, font, size, gray, centerX - PdfPrimitives.width(font, size, value) / 2, yTop, value);
     }
 
     private static PDFont loadBodyFont(PDDocument document) {

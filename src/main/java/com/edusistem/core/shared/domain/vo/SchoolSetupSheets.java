@@ -2,12 +2,14 @@ package com.edusistem.core.shared.domain.vo;
 
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary.SheetSpec;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Libro "Configuración escolar": lo lee {@code POST /imports/school-setup} y lo generan la plantilla y
@@ -149,6 +151,25 @@ public final class SchoolSetupSheets {
     }
 
     private SchoolSetupSheets() {
+    }
+
+    /** Nombres canónicos de las hojas en orden de procesamiento (cada una depende de las anteriores). */
+    public static List<String> sheetNames() {
+        return List.copyOf(SHEETS.keySet());
+    }
+
+    /**
+     * Ordena elementos que corresponden uno a uno con las hojas (p. ej. importadores o exportadores por hoja) según
+     * {@link #sheetNames()}. Falla si falta una hoja, sobra o está repetida.
+     */
+    public static <T> List<T> inSheetOrder(List<T> items, Function<T, String> sheetNameOf) {
+        List<String> order = sheetNames();
+        List<String> provided = items.stream().map(sheetNameOf).toList();
+        if (provided.size() != order.size() || !new HashSet<>(provided).equals(new HashSet<>(order))) {
+            throw new IllegalStateException("Expected exactly one element per school setup sheet " + order
+                    + " but got " + provided);
+        }
+        return items.stream().sorted(Comparator.comparingInt(i -> order.indexOf(sheetNameOf.apply(i)))).toList();
     }
 
     public static SheetSpec spec(String sheetName) {

@@ -22,13 +22,38 @@ import com.edusistem.core.evaluation.domain.outputports.EvaluationCategoryReposi
 import com.edusistem.core.grading.domain.inputports.ConfigureGradingUseCase;
 import com.edusistem.core.grading.domain.outputports.GradingConfigurationRepositoryPort;
 import com.edusistem.core.grading.domain.outputports.GradingScaleRepositoryPort;
-import com.edusistem.core.imports.application.use_case.service.ClassSetupApplier;
+import com.edusistem.core.imports.application.batch.DefaultImportBatchTracker;
+import com.edusistem.core.imports.application.classsetup.GradingSetupApplier;
+import com.edusistem.core.imports.application.classsetup.ScheduleSetupApplier;
+import com.edusistem.core.imports.application.contracts.ClassGradingConfigurer;
+import com.edusistem.core.imports.application.contracts.ClassResolver;
+import com.edusistem.core.imports.application.contracts.ClassScheduleConfigurer;
+import com.edusistem.core.imports.application.contracts.ImportBatchTracker;
+import com.edusistem.core.imports.application.contracts.SchoolSetupSheetImporter;
+import com.edusistem.core.imports.application.contracts.StudentRoster;
+import com.edusistem.core.imports.application.contracts.TeachingPeriodCatalog;
+import com.edusistem.core.imports.application.schoolsetup.resolution.DefaultClassResolver;
+import com.edusistem.core.imports.application.schoolsetup.resolution.DefaultStudentRoster;
+import com.edusistem.core.imports.application.schoolsetup.resolution.DefaultTeachingPeriodCatalog;
+import com.edusistem.core.imports.application.schoolsetup.sheets.AcademicGradesSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.AcademicPeriodsSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.ActivitiesSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.ActivityGradesSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.AttendanceSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.ClassesSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.GroupsSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.SchedulesSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.StudentsSheetImporter;
+import com.edusistem.core.imports.application.schoolsetup.sheets.SubjectsSheetImporter;
+import com.edusistem.core.imports.application.student.StudentImportApplier;
+import com.edusistem.core.imports.application.teachingperiod.sheets.PeriodAttendanceSheetImporter;
+import com.edusistem.core.imports.application.teachingperiod.sheets.PeriodGradesSheetImporter;
+import com.edusistem.core.imports.application.teachingperiod.sheets.PeriodStudentsSheetImporter;
 import com.edusistem.core.imports.application.use_case.service.ImportFileRetentionService;
 import com.edusistem.core.imports.application.use_case.service.ImportQueryService;
 import com.edusistem.core.imports.application.use_case.service.ImportSchoolSetupService;
 import com.edusistem.core.imports.application.use_case.service.ImportStudentsService;
 import com.edusistem.core.imports.application.use_case.service.ImportTeachingPeriodDataService;
-import com.edusistem.core.imports.application.use_case.service.StudentImportApplier;
 import com.edusistem.core.imports.domain.outputports.ImportBatchRepositoryPort;
 import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
@@ -39,12 +64,15 @@ import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import com.edusistem.core.subject.domain.inputports.ManageSubjectUseCase;
 import com.edusistem.core.subject.domain.outputports.SubjectRepositoryPort;
 import java.time.Clock;
+import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Registra como beans los casos de uso de la capa application del módulo imports. */
+/** Registra como beans los casos de uso de la capa application del módulo imports y sus colaboradores. */
 @Configuration
 public class ImportBeanConfig {
+
+    // ------------------------------------------------------------------ colaboradores compartidos
 
     @Bean
     StudentImportApplier studentImportApplier(RegisterStudentUseCase students) {
@@ -52,15 +80,109 @@ public class ImportBeanConfig {
     }
 
     @Bean
-    ClassSetupApplier classSetupApplier(ConfigureGradingUseCase configureGrading,
-                                        GradingConfigurationRepositoryPort configurations,
-                                        GradingScaleRepositoryPort scales, EvaluationCategoryRepositoryPort categories,
-                                        ManageTeachingPeriodScheduleUseCase manageSchedule,
-                                        TeachingPeriodScheduleRepositoryPort schedules,
-                                        TeachingPeriodRepositoryPort teachingPeriods) {
-        return new ClassSetupApplier(configureGrading, configurations, scales, categories, manageSchedule, schedules,
-                                     teachingPeriods);
+    ImportBatchTracker importBatchTracker(ImportBatchRepositoryPort batches, FileStoragePort storage,
+                                          SpreadsheetWriterPort writer, RecordAuditUseCase audit, Clock clock) {
+        return new DefaultImportBatchTracker(batches, storage, writer, audit, clock);
     }
+
+    @Bean
+    ClassResolver importClassResolver(GroupRepositoryPort groups, SubjectRepositoryPort subjects,
+                                      AcademicPeriodRepositoryPort academicPeriods,
+                                      TeachingAssignmentRepositoryPort teachingAssignments,
+                                      ManageTeachingAssignmentUseCase manageTeachingAssignment,
+                                      TeachingPeriodRepositoryPort teachingPeriods,
+                                      ManageTeachingPeriodUseCase manageTeachingPeriod) {
+        return new DefaultClassResolver(groups, subjects, academicPeriods, teachingAssignments,
+                                        manageTeachingAssignment, teachingPeriods, manageTeachingPeriod);
+    }
+
+    @Bean
+    StudentRoster importStudentRoster(StudentRepositoryPort students, TeachingPeriodRepositoryPort teachingPeriods) {
+        return new DefaultStudentRoster(students, teachingPeriods);
+    }
+
+    @Bean
+    TeachingPeriodCatalog importTeachingPeriodCatalog(ActivityRepositoryPort activities,
+                                                      AttendanceSessionRepositoryPort sessions) {
+        return new DefaultTeachingPeriodCatalog(activities, sessions);
+    }
+
+    @Bean
+    ClassGradingConfigurer classGradingConfigurer(ConfigureGradingUseCase configureGrading,
+                                                  GradingConfigurationRepositoryPort configurations,
+                                                  GradingScaleRepositoryPort scales,
+                                                  EvaluationCategoryRepositoryPort categories) {
+        return new GradingSetupApplier(configureGrading, configurations, scales, categories);
+    }
+
+    @Bean
+    ClassScheduleConfigurer classScheduleConfigurer(ManageTeachingPeriodScheduleUseCase manageSchedule,
+                                                    TeachingPeriodScheduleRepositoryPort schedules,
+                                                    TeachingPeriodRepositoryPort teachingPeriods) {
+        return new ScheduleSetupApplier(manageSchedule, schedules, teachingPeriods);
+    }
+
+    // ------------------------------------------------------------------ hojas de configuración escolar
+
+    @Bean
+    SchoolSetupSheetImporter academicPeriodsSheetImporter(AcademicPeriodRepositoryPort academicPeriods,
+                                                          ManageAcademicPeriodUseCase manageAcademicPeriod) {
+        return new AcademicPeriodsSheetImporter(academicPeriods, manageAcademicPeriod);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter academicGradesSheetImporter(GradeRepositoryPort grades, ManageGradeUseCase manageGrade) {
+        return new AcademicGradesSheetImporter(grades, manageGrade);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter subjectsSheetImporter(SubjectRepositoryPort subjects, ManageSubjectUseCase manageSubject) {
+        return new SubjectsSheetImporter(subjects, manageSubject);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter groupsSheetImporter(GroupRepositoryPort groups, GradeRepositoryPort grades,
+                                                 ManageGroupUseCase manageGroup) {
+        return new GroupsSheetImporter(groups, grades, manageGroup);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter classesSheetImporter(GroupRepositoryPort groups, SubjectRepositoryPort subjects,
+                                                  AcademicPeriodRepositoryPort academicPeriods, ClassResolver classes,
+                                                  ClassGradingConfigurer grading) {
+        return new ClassesSheetImporter(groups, subjects, academicPeriods, classes, grading);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter schedulesSheetImporter(ClassResolver classes, ClassScheduleConfigurer schedules) {
+        return new SchedulesSheetImporter(classes, schedules);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter studentsSheetImporter(StudentRepositoryPort students, GroupRepositoryPort groups,
+                                                   StudentImportApplier applier, Clock clock) {
+        return new StudentsSheetImporter(students, groups, applier, clock);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter activitiesSheetImporter(ClassResolver classes, TeachingPeriodCatalog catalog,
+                                                     ManageActivityUseCase manageActivity) {
+        return new ActivitiesSheetImporter(classes, catalog, manageActivity);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter activityGradesSheetImporter(ClassResolver classes, TeachingPeriodCatalog catalog,
+                                                         StudentRoster roster, GradeActivityUseCase gradeActivity) {
+        return new ActivityGradesSheetImporter(classes, catalog, roster, gradeActivity);
+    }
+
+    @Bean
+    SchoolSetupSheetImporter attendanceSheetImporter(ClassResolver classes, TeachingPeriodCatalog catalog,
+                                                     StudentRoster roster, ManageAttendanceUseCase attendance) {
+        return new AttendanceSheetImporter(classes, catalog, roster, attendance);
+    }
+
+    // ------------------------------------------------------------------ casos de uso
 
     @Bean
     ImportQueryService importQueryService(ImportBatchRepositoryPort batches, FileStoragePort storage) {
@@ -72,61 +194,36 @@ public class ImportBeanConfig {
         return new ImportFileRetentionService(batches, storage);
     }
 
+    /** Recibe los 10 importadores de hoja; el servicio los ordena según {@code SchoolSetupSheets}. */
     @Bean
-    ImportSchoolSetupService importSchoolSetupService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
-                                                      ImportBatchRepositoryPort batches, FileStoragePort storage,
-                                                      RecordAuditUseCase audit, Clock clock,
-                                                      AcademicPeriodRepositoryPort academicPeriods,
-                                                      ManageAcademicPeriodUseCase manageAcademicPeriod,
-                                                      GradeRepositoryPort grades, ManageGradeUseCase manageGrade,
-                                                      SubjectRepositoryPort subjects,
-                                                      ManageSubjectUseCase manageSubject, GroupRepositoryPort groups,
-                                                      ManageGroupUseCase manageGroup,
-                                                      TeachingAssignmentRepositoryPort teachingAssignments,
-                                                      ManageTeachingAssignmentUseCase manageTeachingAssignment,
-                                                      TeachingPeriodRepositoryPort teachingPeriods,
-                                                      ManageTeachingPeriodUseCase manageTeachingPeriod,
-                                                      StudentRepositoryPort students, StudentImportApplier applier,
-                                                      ActivityRepositoryPort activityRepo,
-                                                      ManageActivityUseCase manageActivity,
-                                                      GradeActivityUseCase gradeActivity,
-                                                      AttendanceSessionRepositoryPort sessions,
-                                                      ManageAttendanceUseCase attendance,
-                                                      ClassSetupApplier classSetup) {
-        return new ImportSchoolSetupService(reader, writer, batches, storage, audit, clock, academicPeriods,
-                                            manageAcademicPeriod, grades, manageGrade, subjects, manageSubject,
-                                            groups, manageGroup, teachingAssignments, manageTeachingAssignment,
-                                            teachingPeriods, manageTeachingPeriod, students, applier,
-                                            activityRepo, manageActivity, gradeActivity, sessions, attendance,
-                                            classSetup);
+    ImportSchoolSetupService importSchoolSetupService(ImportBatchTracker batches, SpreadsheetReaderPort reader,
+                                                      SpreadsheetWriterPort writer, ClassGradingConfigurer grading,
+                                                      List<SchoolSetupSheetImporter> importers) {
+        return new ImportSchoolSetupService(batches, reader, writer, grading, importers);
     }
 
     @Bean
-    ImportStudentsService importStudentsService(SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
-                                                ImportBatchRepositoryPort batches, StudentRepositoryPort students,
+    ImportStudentsService importStudentsService(ImportBatchTracker batches, SpreadsheetReaderPort reader,
+                                                SpreadsheetWriterPort writer, StudentRepositoryPort students,
                                                 GradeRepositoryPort grades, GroupRepositoryPort groups,
-                                                FileStoragePort storage, StudentImportApplier applier,
-                                                RecordAuditUseCase audit, Clock clock) {
-        return new ImportStudentsService(reader, writer, batches, students, grades, groups, storage,
-                                         applier, audit, clock);
+                                                StudentImportApplier applier, Clock clock) {
+        return new ImportStudentsService(batches, reader, writer, students, grades, groups, applier, clock);
     }
 
+    /** Las hojas del teaching period se procesan en este orden: Estudiantes primero. */
     @Bean
-    ImportTeachingPeriodDataService importTeachingPeriodDataService(SpreadsheetReaderPort reader,
-                                                                    SpreadsheetWriterPort writer,
-                                                                    ImportBatchRepositoryPort batches,
-                                                                    StudentRepositoryPort students,
-                                                                    OwnershipGuard guard,
+    ImportTeachingPeriodDataService importTeachingPeriodDataService(ImportBatchTracker batches,
+                                                                    SpreadsheetReaderPort reader, OwnershipGuard guard,
                                                                     TeachingPeriodRepositoryPort teachingPeriods,
-                                                                    ActivityRepositoryPort activities,
-                                                                    GradeActivityUseCase gradeActivity,
-                                                                    AttendanceSessionRepositoryPort sessions,
-                                                                    ManageAttendanceUseCase attendance,
+                                                                    StudentRoster roster,
+                                                                    StudentRepositoryPort students,
                                                                     StudentImportApplier applier,
-                                                                    FileStoragePort storage,
-                                                                    RecordAuditUseCase audit, Clock clock) {
-        return new ImportTeachingPeriodDataService(reader, writer, batches, students, guard,
-                                                   teachingPeriods, activities, gradeActivity, sessions, attendance,
-                                                   applier, storage, audit, clock);
+                                                                    TeachingPeriodCatalog catalog,
+                                                                    GradeActivityUseCase gradeActivity,
+                                                                    ManageAttendanceUseCase attendance) {
+        return new ImportTeachingPeriodDataService(batches, reader, guard, teachingPeriods, roster, List.of(
+                new PeriodStudentsSheetImporter(students, applier),
+                new PeriodGradesSheetImporter(catalog, gradeActivity),
+                new PeriodAttendanceSheetImporter(catalog, attendance)));
     }
 }

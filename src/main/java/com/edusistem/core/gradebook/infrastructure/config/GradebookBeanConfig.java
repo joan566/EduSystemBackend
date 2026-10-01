@@ -4,9 +4,13 @@ import com.edusistem.core.academic.domain.outputports.TeachingPeriodRepositoryPo
 import com.edusistem.core.activity.domain.inputports.GradeActivityUseCase;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.evaluation.domain.outputports.EvaluationCategoryRepositoryPort;
+import com.edusistem.core.gradebook.application.contracts.EnrolledStudentLookup;
+import com.edusistem.core.gradebook.application.enrollment.DefaultEnrolledStudentLookup;
 import com.edusistem.core.gradebook.application.use_case.service.GradeAttachmentService;
 import com.edusistem.core.gradebook.application.use_case.service.GradebookService;
 import com.edusistem.core.gradebook.application.use_case.service.RubricService;
+import com.edusistem.core.gradebook.application.use_case.service.StudentObservationService;
+import com.edusistem.core.gradebook.domain.inputports.QueryGradebookUseCase;
 import com.edusistem.core.gradebook.domain.outputports.GradeAttachmentRepositoryPort;
 import com.edusistem.core.gradebook.domain.outputports.GradebookQueryPort;
 import com.edusistem.core.gradebook.domain.outputports.RubricRepositoryPort;
@@ -25,28 +29,40 @@ import org.springframework.context.annotation.Configuration;
 public class GradebookBeanConfig {
 
     @Bean
+    EnrolledStudentLookup enrolledStudentLookup(TeachingPeriodRepositoryPort teachingPeriods,
+                                                StudentRepositoryPort students,
+                                                StudentGroupRepositoryPort studentGroups) {
+        return new DefaultEnrolledStudentLookup(teachingPeriods, students, studentGroups);
+    }
+
+    @Bean
     GradebookService gradebookService(GradebookQueryPort query, GradingConfigurationRepositoryPort configurations,
                                       GradingScaleRepositoryPort scales, EvaluationCategoryRepositoryPort categories,
-                                      TeachingPeriodRepositoryPort teachingPeriods, StudentRepositoryPort students,
-                                      StudentGroupRepositoryPort studentGroups, RubricRepositoryPort rubrics,
-                                      GradeAttachmentRepositoryPort attachments,
-                                      StudentObservationRepositoryPort observations, OwnershipGuard guard,
-                                      RecordAuditUseCase audit) {
-        return new GradebookService(query, configurations, scales, categories, teachingPeriods, students,
-                studentGroups, rubrics, attachments, observations, guard, audit);
+                                      RubricRepositoryPort rubrics, GradeAttachmentRepositoryPort attachments,
+                                      StudentObservationRepositoryPort observations,
+                                      EnrolledStudentLookup enrolledStudents, OwnershipGuard guard) {
+        return new GradebookService(query, configurations, scales, categories, rubrics, attachments, observations,
+                enrolledStudents, guard);
+    }
+
+    @Bean
+    StudentObservationService studentObservationService(StudentObservationRepositoryPort observations,
+                                                        EnrolledStudentLookup enrolledStudents, OwnershipGuard guard,
+                                                        RecordAuditUseCase audit) {
+        return new StudentObservationService(observations, enrolledStudents, guard, audit);
     }
 
     @Bean
     RubricService rubricService(GradebookQueryPort query, RubricRepositoryPort rubrics,
-                                GradeActivityUseCase activityGrades, GradebookService gradebook, OwnershipGuard guard,
+                                GradeActivityUseCase activityGrades, QueryGradebookUseCase gradebook, OwnershipGuard guard,
                                 RecordAuditUseCase audit) {
         return new RubricService(query, rubrics, activityGrades, gradebook, guard, audit);
     }
 
     @Bean
     GradeAttachmentService gradeAttachmentService(GradebookQueryPort query, GradeAttachmentRepositoryPort attachments,
-                                                  GradebookService gradebook, FileStoragePort storage,
+                                                  EnrolledStudentLookup enrolledStudents, FileStoragePort storage,
                                                   OwnershipGuard guard, RecordAuditUseCase audit) {
-        return new GradeAttachmentService(query, attachments, gradebook, storage, guard, audit);
+        return new GradeAttachmentService(query, attachments, enrolledStudents, storage, guard, audit);
     }
 }

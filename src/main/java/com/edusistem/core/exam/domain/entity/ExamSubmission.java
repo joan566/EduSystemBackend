@@ -41,6 +41,13 @@ public class ExamSubmission {
         return answers.stream().anyMatch(ExamAnswer::needsReview);
     }
 
+    /** PROCESSED, o REVIEW_REQUIRED (con cuántas respuestas faltan) si alguna respuesta necesita revisión manual. */
+    public void refreshReviewStatus() {
+        long pending = answers.stream().filter(ExamAnswer::needsReview).count();
+        this.status = pending > 0 ? ExamSubmissionStatus.REVIEW_REQUIRED : ExamSubmissionStatus.PROCESSED;
+        this.statusDetail = pending > 0 ? pending + " answer(s) require manual review" : null;
+    }
+
     public void markFailed(String detail, LocalDateTime now) {
         this.status = ExamSubmissionStatus.FAILED;
         this.statusDetail = detail == null ? null : detail.substring(0, Math.min(detail.length(), 500));

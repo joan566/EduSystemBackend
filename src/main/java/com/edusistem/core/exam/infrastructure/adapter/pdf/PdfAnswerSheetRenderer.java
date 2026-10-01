@@ -114,10 +114,10 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
         float width = HEADER_RIGHT - LEFT;
         text(cs, bold, 8, MUTED, LEFT, 68, "HOJA DE RESPUESTAS");
         float titleSize = 16;
-        while (titleSize > 12 && width(bold, titleSize, sheet.examName()) > width) {
+        while (titleSize > 12 && PdfPrimitives.width(bold, titleSize, sheet.examName()) > width) {
             titleSize -= 0.5f;
         }
-        text(cs, bold, titleSize, INK, LEFT, 89, fit(sheet.examName(), bold, titleSize, width));
+        text(cs, bold, titleSize, INK, LEFT, 89, PdfPrimitives.fit(sheet.examName(), bold, titleSize, width));
 
         cs.setStrokingColor(RULE);
         cs.setLineWidth(0.6f);
@@ -141,7 +141,7 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
     private void field(PDPageContentStream cs, float left, float right, float top, String label, String value,
                        float size) throws IOException {
         text(cs, bold, 6, MUTED, left + 8, top + 10, label);
-        text(cs, bold, size, INK, left + 8, top + 23, fit(value, bold, size, right - left - 16));
+        text(cs, bold, size, INK, left + 8, top + 23, PdfPrimitives.fit(value, bold, size, right - left - 16));
     }
 
     private void drawInstructions(PDPageContentStream cs) throws IOException {
@@ -163,7 +163,7 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
         text(cs, bold, 6, MUTED, correctX - r, INSTRUCTIONS_TOP + 11, "CORRECTO");
         exampleBubble(cs, correctX, exampleY, r);
         cs.setNonStrokingColor(INK);
-        circle(cs, correctX, PAGE_H - exampleY, r);
+        PdfPrimitives.circle(cs, correctX, PAGE_H - exampleY, r);
         cs.fill();
 
         float wrongX = 462;
@@ -186,25 +186,25 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
         float dotX = crossX + 17;
         exampleBubble(cs, dotX, exampleY, r);
         cs.setNonStrokingColor(INK);
-        circle(cs, dotX, PAGE_H - exampleY, 1.8);
+        PdfPrimitives.circle(cs, dotX, PAGE_H - exampleY, 1.8);
         cs.fill();
         // Dos círculos rellenos
         float doubleX = dotX + 17;
         exampleBubble(cs, doubleX, exampleY, r);
         exampleBubble(cs, doubleX + 12, exampleY, r);
         cs.setNonStrokingColor(INK);
-        circle(cs, doubleX, PAGE_H - exampleY, r);
-        circle(cs, doubleX + 12, PAGE_H - exampleY, r);
+        PdfPrimitives.circle(cs, doubleX, PAGE_H - exampleY, r);
+        PdfPrimitives.circle(cs, doubleX + 12, PAGE_H - exampleY, r);
         cs.fill();
     }
 
     private void exampleBubble(PDPageContentStream cs, float x, float yTop, float r) throws IOException {
         cs.setNonStrokingColor(1f);
-        circle(cs, x, PAGE_H - yTop, r);
+        PdfPrimitives.circle(cs, x, PAGE_H - yTop, r);
         cs.fill();
         cs.setStrokingColor(BUBBLE_STROKE);
         cs.setLineWidth(0.75f);
-        circle(cs, x, PAGE_H - yTop, r);
+        PdfPrimitives.circle(cs, x, PAGE_H - yTop, r);
         cs.stroke();
     }
 
@@ -230,13 +230,13 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
             AnswerSheetLayout.Point first = layout.bubbleCenter(q, 0);
             String number = String.valueOf(q);
             float numberRight = (float) (first.x() - r - 5.5);
-            text(cs, bold, 8, INK, numberRight - width(bold, 8, number), (float) first.y() + 2.9f, number);
+            text(cs, bold, 8, INK, numberRight - PdfPrimitives.width(bold, 8, number), (float) first.y() + 2.9f, number);
 
             cs.setStrokingColor(BUBBLE_STROKE);
             cs.setLineWidth(0.75f);
             for (int o = 0; o < layout.optionCount(); o++) {
                 AnswerSheetLayout.Point c = layout.bubbleCenter(q, o);
-                circle(cs, c.x(), PAGE_H - c.y(), r);
+                PdfPrimitives.circle(cs, c.x(), PAGE_H - c.y(), r);
             }
             cs.stroke();
             for (int o = 0; o < layout.optionCount(); o++) {
@@ -273,16 +273,6 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
 
     // ---------------------------------------------------------------- primitivas ({@code yTop} desde arriba)
 
-    private static void circle(PDPageContentStream cs, double cx, double cy, double r) throws IOException {
-        double k = 0.5523 * r;
-        cs.moveTo((float) (cx + r), (float) cy);
-        cs.curveTo((float) (cx + r), (float) (cy + k), (float) (cx + k), (float) (cy + r), (float) cx, (float) (cy + r));
-        cs.curveTo((float) (cx - k), (float) (cy + r), (float) (cx - r), (float) (cy + k), (float) (cx - r), (float) cy);
-        cs.curveTo((float) (cx - r), (float) (cy - k), (float) (cx - k), (float) (cy - r), (float) cx, (float) (cy - r));
-        cs.curveTo((float) (cx + k), (float) (cy - r), (float) (cx + r), (float) (cy - k), (float) (cx + r), (float) cy);
-        cs.closePath();
-    }
-
     private static void roundedRect(PDPageContentStream cs, float x, float yTop, float w, float h, float r)
             throws IOException {
         float bottom = (float) (PAGE_H - yTop - h);
@@ -315,49 +305,13 @@ public class PdfAnswerSheetRenderer implements AnswerSheetRendererPort {
     }
 
     /** {@code yTop} es la línea base medida desde el borde superior de la página. */
-    private void text(PDPageContentStream cs, PDFont font, float size, float gray, float x, float yTop, String value)
-            throws IOException {
-        cs.beginText();
-        cs.setNonStrokingColor(gray);
-        cs.setFont(font, size);
-        cs.newLineAtOffset(x, (float) (PAGE_H - yTop));
-        cs.showText(sanitize(font, value));
-        cs.endText();
+    private static void text(PDPageContentStream cs, PDFont font, float size, float gray, float x, float yTop,
+                             String value) throws IOException {
+        PdfPrimitives.text(cs, font, size, gray, x, (float) (PAGE_H - yTop), value);
     }
 
-    private void centeredText(PDPageContentStream cs, PDFont font, float size, float gray, float centerX, float yTop,
-                              String value) throws IOException {
-        text(cs, font, size, gray, centerX - width(font, size, value) / 2, yTop, value);
-    }
-
-    private static float width(PDFont font, float size, String value) throws IOException {
-        return font.getStringWidth(sanitize(font, value)) / 1000 * size;
-    }
-
-    /** Recorta el texto al ancho disponible añadiendo "…" si no cabe. */
-    private static String fit(String value, PDFont font, float size, float maxWidth) throws IOException {
-        String clean = sanitize(font, value).strip();
-        if (width(font, size, clean) <= maxWidth) {
-            return clean;
-        }
-        while (clean.length() > 1 && width(font, size, clean.strip() + "…") > maxWidth) {
-            clean = clean.substring(0, clean.length() - 1);
-        }
-        return clean.strip() + "…";
-    }
-
-    /** Sustituye por '?' los caracteres que la fuente no puede codificar. */
-    static String sanitize(PDFont font, String value) {
-        StringBuilder sb = new StringBuilder();
-        (value == null ? "" : value).codePoints().forEach(cp -> {
-            String c = Character.toString(cp);
-            try {
-                font.encode(c);
-                sb.append(c);
-            } catch (IllegalArgumentException | IOException e) {
-                sb.append('?');
-            }
-        });
-        return sb.toString();
+    private static void centeredText(PDPageContentStream cs, PDFont font, float size, float gray, float centerX,
+                                     float yTop, String value) throws IOException {
+        text(cs, font, size, gray, centerX - PdfPrimitives.width(font, size, value) / 2, yTop, value);
     }
 }

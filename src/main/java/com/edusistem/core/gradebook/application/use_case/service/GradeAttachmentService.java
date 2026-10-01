@@ -3,6 +3,7 @@ package com.edusistem.core.gradebook.application.use_case.service;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.audit.domain.vo.AuditTarget;
+import com.edusistem.core.gradebook.application.contracts.EnrolledStudentLookup;
 import com.edusistem.core.gradebook.application.use_case.dtos.GradebookCommands;
 import com.edusistem.core.gradebook.domain.entity.GradeAttachment;
 import com.edusistem.core.gradebook.domain.inputports.ManageGradeAttachmentUseCase;
@@ -44,17 +45,17 @@ public class GradeAttachmentService implements ManageGradeAttachmentUseCase {
 
     private final GradebookQueryPort query;
     private final GradeAttachmentRepositoryPort attachments;
-    private final GradebookService gradebook;
+    private final EnrolledStudentLookup enrolledStudents;
     private final FileStoragePort storage;
     private final OwnershipGuard guard;
     private final RecordAuditUseCase audit;
 
     public GradeAttachmentService(GradebookQueryPort query, GradeAttachmentRepositoryPort attachments,
-                                  GradebookService gradebook, FileStoragePort storage, OwnershipGuard guard,
+                                  EnrolledStudentLookup enrolledStudents, FileStoragePort storage, OwnershipGuard guard,
                                   RecordAuditUseCase audit) {
         this.query = query;
         this.attachments = attachments;
-        this.gradebook = gradebook;
+        this.enrolledStudents = enrolledStudents;
         this.storage = storage;
         this.guard = guard;
         this.audit = audit;
@@ -70,7 +71,7 @@ public class GradeAttachmentService implements ManageGradeAttachmentUseCase {
         if (kind.type() == EvaluationType.ATTENDANCE) {
             throw new ConflictException("ATTACHMENT_NOT_SUPPORTED", "Attendance grades cannot have attachments");
         }
-        var student = gradebook.enrolledStudent(kind.teachingPeriodId(), command.studentId());
+        var student = enrolledStudents.require(kind.teachingPeriodId(), command.studentId());
         if (command.content() == null || command.content().length == 0) {
             throw new InvalidRequestException("EMPTY_FILE", "The file is empty");
         }

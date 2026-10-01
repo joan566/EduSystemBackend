@@ -1,4 +1,4 @@
-package com.edusistem.core.imports.application.use_case.service;
+package com.edusistem.core.imports.application.student;
 
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
 import com.edusistem.core.student.application.use_case.dtos.StudentCommands;

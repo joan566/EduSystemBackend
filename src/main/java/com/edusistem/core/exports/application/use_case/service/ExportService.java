@@ -27,7 +27,6 @@ import com.edusistem.core.shared.application.service.OwnershipGuard;
 import com.edusistem.core.shared.domain.exceptions.BusinessRuleException;
 import com.edusistem.core.shared.domain.exceptions.ResourceNotFoundException;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
-import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import com.edusistem.core.shared.domain.vo.PeriodWorkbookColumns;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
@@ -37,6 +36,7 @@ import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +49,6 @@ import java.util.stream.Collectors;
  * ({@link SpreadsheetVocabulary}); las claves canónicas en inglés son solo internas.
  */
 public class ExportService implements ExportUseCase {
-
-    private static final int PAGE = PageQuery.MAX_SIZE;
 
     private final StudentRepositoryPort students;
     private final TeachingPeriodRepositoryPort teachingPeriods;
@@ -94,13 +92,7 @@ public class ExportService implements ExportUseCase {
             guard.requireGroup(teacherId, groupId);
             list = students.findActiveByGroupId(groupId);
         } else {
-            list = new ArrayList<>();
-            PageResult<Student> page;
-            int n = 0;
-            do {
-                page = students.searchByTeacher(teacherId, null, null, new PageQuery(n++, PAGE));
-                list.addAll(page.items());
-            } while (n < page.totalPages());
+            list = PageResult.collectAll(page -> students.searchByTeacher(teacherId, null, null, page));
         }
         List<List<Object>> rows = list.stream().map(s -> List.<Object>of(s.getStudentCode(),
                 nullToEmpty(s.getIdentificationNumber()), s.getFirstName(), s.getLastName(), nullToEmpty(s.getEmail()))).toList();
@@ -148,20 +140,8 @@ public class ExportService implements ExportUseCase {
     public ExportedFile attendance(Long teacherId, Long teachingPeriodId) {
         TeachingPeriodView period = period(teacherId, teachingPeriodId);
         List<Student> roster = students.findActiveByGroupId(period.groupId());
-        List<AttendanceSessionView> allSessions = new ArrayList<>();
-        PageResult<AttendanceSessionView> page;
-        int n = 0;
-        do {
-            page = sessions.findViewsByTeachingPeriodId(teachingPeriodId, new PageQuery(n++, PAGE));
-            allSessions.addAll(page.items());
-        } while (n < page.totalPages());
-        allSessions.sort(java.util.Comparator.comparing(AttendanceSessionView::sessionDate));
-
-        Map<Long, Map<Long, AttendanceStatus>> statusBySession = new HashMap<>();
-        for (AttendanceSessionView s : allSessions) {
-            statusBySession.put(s.sessionId(), records.findBySessionId(s.sessionId()).stream()
-                    .collect(Collectors.toMap(AttendanceRecord::getStudentId, AttendanceRecord::getStatus)));
-        }
+        List<AttendanceSessionView> allSessions = allSessions(teachingPeriodId);
+        Map<Long, Map<Long, AttendanceStatus>> statusBySession = statusBySession(allSessions);
         List<String> headers = new ArrayList<>(List.of("student_code", "last_name", "first_name"));
         allSessions.forEach(s -> headers.add(s.sessionDate().toString()));
         headers.addAll(List.of("present", "absent", "excused", "attendance_percent"));
@@ -233,11 +213,7 @@ public class ExportService implements ExportUseCase {
     private TabularData fullAttendanceSheet(List<Student> roster, List<AttendanceSessionView> sessionList) {
         List<String> headers = new ArrayList<>(List.of("identification_number", "last_name", "first_name"));
         sessionList.forEach(s -> headers.add(PeriodWorkbookColumns.sessionHeader(s.sessionDate(), s.sessionId())));
-        Map<Long, Map<Long, AttendanceStatus>> statusBySession = new HashMap<>();
-        for (AttendanceSessionView s : sessionList) {
-            statusBySession.put(s.sessionId(), records.findBySessionId(s.sessionId()).stream()
-                    .collect(Collectors.toMap(AttendanceRecord::getStudentId, AttendanceRecord::getStatus)));
-        }
+        Map<Long, Map<Long, AttendanceStatus>> statusBySession = statusBySession(sessionList);
         List<List<Object>> rows = new ArrayList<>();
         for (Student student : roster) {
             List<Object> row = new ArrayList<>(List.of(nullToEmpty(student.getIdentificationNumber()), student.getLastName(),
@@ -252,26 +228,25 @@ public class ExportService implements ExportUseCase {
     }
 
     private List<ActivityView> allActivities(Long teachingPeriodId) {
-        List<ActivityView> list = new ArrayList<>();
-        PageResult<ActivityView> page;
-        int n = 0;
-        do {
-            page = activities.findViewsByTeachingPeriodId(teachingPeriodId, new PageQuery(n++, PAGE));
-            list.addAll(page.items());
-        } while (n < page.totalPages());
+        return PageResult.collectAll(page -> activities.findViewsByTeachingPeriodId(teachingPeriodId, page));
+    }
+
+    /** Todas las sesiones del periodo, ordenadas por fecha. */
+    private List<AttendanceSessionView> allSessions(Long teachingPeriodId) {
+        List<AttendanceSessionView> list = PageResult.collectAll(
+                page -> sessions.findViewsByTeachingPeriodId(teachingPeriodId, page));
+        list.sort(Comparator.comparing(AttendanceSessionView::sessionDate));
         return list;
     }
 
-    private List<AttendanceSessionView> allSessions(Long teachingPeriodId) {
-        List<AttendanceSessionView> list = new ArrayList<>();
-        PageResult<AttendanceSessionView> page;
-        int n = 0;
-        do {
-            page = sessions.findViewsByTeachingPeriodId(teachingPeriodId, new PageQuery(n++, PAGE));
-            list.addAll(page.items());
-        } while (n < page.totalPages());
-        list.sort(java.util.Comparator.comparing(AttendanceSessionView::sessionDate));
-        return list;
+    /** Estado registrado por sesión y luego por estudiante. */
+    private Map<Long, Map<Long, AttendanceStatus>> statusBySession(List<AttendanceSessionView> sessionList) {
+        Map<Long, Map<Long, AttendanceStatus>> statusBySession = new HashMap<>();
+        for (AttendanceSessionView s : sessionList) {
+            statusBySession.put(s.sessionId(), records.findBySessionId(s.sessionId()).stream()
+                    .collect(Collectors.toMap(AttendanceRecord::getStudentId, AttendanceRecord::getStatus)));
+        }
+        return statusBySession;
     }
 
     private static AuditTarget target(String entityType, TeachingPeriodView period) {

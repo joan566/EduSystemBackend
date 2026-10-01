@@ -1,4 +1,4 @@
-package com.edusistem.core.imports.application.use_case.service;
+package com.edusistem.core.imports.application.support;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  * Interpretación tolerante de lo que un profesor escribe a mano en una celda. Cada método devuelve {@code null} si el
  * texto no se puede interpretar; quien llama decide el mensaje de error.
  */
-final class CellValues {
+public final class CellValues {
 
     private static final DateTimeFormatter DAY_MONTH_YEAR = DateTimeFormatter.ofPattern("d/M/uuuu")
             .withResolverStyle(ResolverStyle.STRICT);
@@ -27,7 +27,7 @@ final class CellValues {
     }
 
     /** "2026-03-15", "15/03/2026" o "15-03-2026" (día primero, como se escribe en español). */
-    static LocalDate date(String raw) {
+    public static LocalDate date(String raw) {
         String text = raw.trim();
         try {
             return LocalDate.parse(text);
@@ -41,7 +41,7 @@ final class CellValues {
     }
 
     /** Fecha con hora opcional ("2026-02-10 09:00", "10/02/2026 9:00 am" o sólo "2026-02-10"). */
-    static LocalDateTime dateTime(String raw) {
+    public static LocalDateTime dateTime(String raw) {
         String text = raw.trim().replace('T', ' ');
         int space = text.indexOf(' ');
         LocalDate date = date(space < 0 ? text : text.substring(0, space));
@@ -55,7 +55,7 @@ final class CellValues {
         return time == null ? null : date.atTime(time);
     }
 
-    static LocalTime time(String raw) {
+    public static LocalTime time(String raw) {
         Matcher m = TIME.matcher(raw.trim().replace(' ', ' '));
         if (!m.matches()) {
             return null;
@@ -76,7 +76,7 @@ final class CellValues {
     }
 
     /** Número con punto o coma decimal ("3.5" o "3,5"). */
-    static BigDecimal decimal(String raw) {
+    public static BigDecimal decimal(String raw) {
         try {
             return new BigDecimal(raw.trim().replace(',', '.'));
         } catch (NumberFormatException e) {
@@ -85,7 +85,7 @@ final class CellValues {
     }
 
     /** Porcentaje: "30", "30%", "30 %" o "30,5" → 30 / 30.5. */
-    static BigDecimal percent(String raw) {
+    public static BigDecimal percent(String raw) {
         String text = raw.trim();
         if (text.endsWith("%")) {
             text = text.substring(0, text.length() - 1);

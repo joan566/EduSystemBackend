@@ -16,6 +16,7 @@ import com.edusistem.core.exam.domain.outputports.ExamSubmissionRepositoryPort;
 import com.edusistem.core.exam.domain.service.ExamScorer;
 import com.edusistem.core.exam.domain.vo.ExamSubmissionSummary;
 import com.edusistem.core.exam.domain.vo.ImageFile;
+import com.edusistem.core.exam.domain.vo.ImageFormat;
 import com.edusistem.core.exam.domain.vo.SubmissionDetails;
 import com.edusistem.core.grading.domain.entity.GradingScale;
 import com.edusistem.core.shared.application.service.OwnershipGuard;
@@ -78,8 +79,7 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
         }
         try {
             byte[] content = storage.read(path);
-            boolean png = content.length > 3 && (content[0] & 0xFF) == 0x89 && content[1] == 'P';
-            return new ImageFile(png ? "image/png" : "image/jpeg", content);
+            return new ImageFile(ImageFormat.detect(content).orElse(ImageFormat.JPEG).mediaType(), content);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -120,7 +120,7 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
         BigDecimal score = ExamScorer.score(ctx.exam().getQuestions(), submission.getAnswers());
         submission.setScore(score);
         submission.setFinalGrade(scale.convert(score, ctx.evaluation().getMaximumScore()));
-        refreshStatus(submission);
+        submission.refreshReviewStatus();
         ExamSubmission saved = submissions.save(submission);
 
         audit.success(command.teacherId(), AuditAction.ANSWER_UPDATED, target(saved, ctx),
@@ -174,12 +174,6 @@ public class SubmissionReviewService implements ReviewSubmissionUseCase, QuerySu
             throw new ConflictException("SUBMISSION_NOT_REVIEWABLE",
                     "The submission has no detected answers; upload the sheet again");
         }
-    }
-
-    private static void refreshStatus(ExamSubmission submission) {
-        long pending = submission.getAnswers().stream().filter(ExamAnswer::needsReview).count();
-        submission.setStatus(pending > 0 ? ExamSubmissionStatus.REVIEW_REQUIRED : ExamSubmissionStatus.PROCESSED);
-        submission.setStatusDetail(pending > 0 ? pending + " answer(s) require manual review" : null);
     }
 
     private static String describe(ExamAnswer a) {
