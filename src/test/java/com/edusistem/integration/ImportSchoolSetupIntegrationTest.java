@@ -24,7 +24,11 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
 
     private static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
+    /** Con 202 espera a que termine la importación y devuelve {@code GET /imports/{id}}. */
     private JsonNode uploadSchoolSetup(Teacher t, byte[] content, int status) {
+        if (status == 202) {
+            return runImport(t, "/api/v1/imports/school-setup", "school-setup.xlsx", content);
+        }
         MvcResult result = upload(t, "/api/v1/imports/school-setup", "file", "school-setup.xlsx", XLSX, content, Map.of());
         return parse(result, status);
     }
@@ -63,7 +67,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
     void templateCanBeUploadedAsIs() {
         Teacher t = newTeacher();
         byte[] template = download(t, "/api/v1/imports/school-setup/template").getResponse().getContentAsByteArray();
-        JsonNode result = uploadSchoolSetup(t, template, 201);
+        JsonNode result = uploadSchoolSetup(t, template, 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("failedRows").asInt()).isZero();
         assertThat(result.get("totalRows").asInt()).isEqualTo(10);
@@ -110,7 +114,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
                         List.of(List.<Object>of(gradeName, groupName, YEAR, subjectName, periodName,
                                 LocalDate.of(YEAR, 2, 1), studentId, "PRESENT")))));
 
-        JsonNode result = uploadSchoolSetup(t, workbook, 201);
+        JsonNode result = uploadSchoolSetup(t, workbook, 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("failedRows").asInt()).isZero();
         assertThat(result.get("totalRows").asInt()).isEqualTo(9);
@@ -169,7 +173,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
                         List.<Object>of(gradeName, "A", YEAR),
                         List.<Object>of(missingGradeName, "B", YEAR)))));
 
-        JsonNode result = uploadSchoolSetup(t, workbook, 201);
+        JsonNode result = uploadSchoolSetup(t, workbook, 202);
         assertThat(result.get("totalRows").asInt()).isEqualTo(3); // 1 AcademicGrades + 2 Groups
         assertThat(result.get("failedRows").asInt()).isEqualTo(1);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(2);
@@ -255,7 +259,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         JsonNode result = uploadSchoolSetup(t, xlsxWorkbook(concat(structure(s),
                 classes(s, "0 a 10", "6", "50%", 30, "20"),
                 schedules(s, List.of(List.of("Lunes", "7:00", "08:00", "Salón 1"),
-                        List.of("miercoles", "2:00 p. m.", "15:00", ""))))), 201);
+                        List.of("miercoles", "2:00 p. m.", "15:00", ""))))), 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("failedRows").asInt()).isZero();
 
@@ -276,7 +280,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         // segunda subida: nuevos pesos sin escala (se conserva 0-10), mismos horarios (no se duplican)
         result = uploadSchoolSetup(t, xlsxWorkbook(List.of(
                 classes(s, "", "", 40, 40, 20),
-                schedules(s, List.of(List.of("Lunes", "07:00", "08:00", "Salón 1"))))), 201);
+                schedules(s, List.of(List.of("Lunes", "07:00", "08:00", "Salón 1"))))), 202);
         assertThat(result.get("errors")).isEmpty();
         config = get(t, "/api/v1/teaching-periods/" + tp + "/grading-configuration", 200);
         assertThat(config.get("scale").get("maximumValue").asDouble()).isEqualTo(10);
@@ -285,7 +289,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         assertThat(get(t, "/api/v1/teaching-periods/" + tp + "/schedules", 200)).hasSize(2);
 
         // celdas de configuración vacías: no se toca nada
-        uploadSchoolSetup(t, xlsxWorkbook(List.of(classes(s, "", "", "", "", ""))), 201);
+        uploadSchoolSetup(t, xlsxWorkbook(List.of(classes(s, "", "", "", "", ""))), 202);
         assertThat(get(t, "/api/v1/teaching-periods/" + tp + "/grading-configuration", 200).get("weights").toString())
                 .contains("40");
     }
@@ -310,7 +314,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
                 row(s.classKey(), "Martes", "09:00", "08:00"),
                 row(s.classKey(), "Feriado", "09:00", "10:00"))));
 
-        JsonNode result = uploadSchoolSetup(t, xlsxWorkbook(sheets), 201);
+        JsonNode result = uploadSchoolSetup(t, xlsxWorkbook(sheets), 202);
         String errors = result.get("errors").toString();
         assertThat(errors).contains("Clases:% Exámenes").contains("suman 120");
         assertThat(errors).contains("Clases:Escala").contains("Escala desconocida");
@@ -332,7 +336,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
         Setup s = newSetup();
         JsonNode result = uploadSchoolSetup(t, xlsxWorkbook(concat(structure(s),
                 new TabularData("Classes", List.of("grade_name", "group_name", "academic_year", "subject_name",
-                        "academic_period_name"), List.of(s.classKey())))), 201);
+                        "academic_period_name"), List.of(s.classKey())))), 202);
         assertThat(result.get("errors")).isEmpty();
         get(t, "/api/v1/teaching-periods/" + teachingPeriodId(t, s) + "/grading-configuration", 404);
     }
@@ -343,7 +347,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
     void exportContainsOnlyOwnDataAndCanBeUploadedAgainWithoutDuplicates() {
         Teacher t = newTeacher();
         byte[] template = download(t, "/api/v1/imports/school-setup/template").getResponse().getContentAsByteArray();
-        assertThat(uploadSchoolSetup(t, template, 201).get("errors")).isEmpty();
+        assertThat(uploadSchoolSetup(t, template, 202).get("errors")).isEmpty();
 
         MvcResult export = download(t, "/api/v1/exports/school-setup");
         assertThat(export.getResponse().getStatus()).isEqualTo(200);
@@ -365,7 +369,7 @@ class ImportSchoolSetupIntegrationTest extends IntegrationTest {
             assertThat(sheet(otherExport, name).getLastRowNum()).as(name).isZero();
         }
 
-        JsonNode reupload = uploadSchoolSetup(t, content, 201);
+        JsonNode reupload = uploadSchoolSetup(t, content, 202);
         assertThat(reupload.get("errors")).isEmpty();
         assertThat(reupload.get("failedRows").asInt()).isZero();
         MvcResult again = download(t, "/api/v1/exports/school-setup");

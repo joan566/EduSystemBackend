@@ -1,14 +1,13 @@
 package com.edusistem.core.imports.application.use_case.service;
 
 import com.edusistem.core.imports.application.contracts.ClassGradingConfigurer;
-import com.edusistem.core.imports.application.contracts.ImportBatchTracker;
-import com.edusistem.core.imports.application.contracts.ImportBatchTracker.ImportOutcome;
-import com.edusistem.core.imports.application.contracts.SchoolSetupSheetImporter;
-import com.edusistem.core.imports.application.schoolsetup.SchoolSetupImportContext;
+import com.edusistem.core.imports.application.contracts.ImportQueue;
+import com.edusistem.core.imports.application.contracts.ImportQueue.ImportRequest;
+import com.edusistem.core.imports.application.schoolsetup.SchoolSetupImportProcessor;
 import com.edusistem.core.imports.application.use_case.dtos.ImportCommands;
+import com.edusistem.core.imports.domain.entity.ImportBatch;
+import com.edusistem.core.imports.domain.enums.ImportType;
 import com.edusistem.core.imports.domain.inputports.ImportSchoolSetupUseCase;
-import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
-import com.edusistem.core.imports.domain.vo.ImportResult;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.SchoolSetupSheets;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
@@ -22,42 +21,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Importación combinada de la configuración completa de un profesor: 10 hojas, todas opcionales, procesadas en el orden
- * de dependencia de {@link SchoolSetupSheets} (cada hoja la importa su propio {@link SchoolSetupSheetImporter}). A
- * diferencia de {@link ImportTeachingPeriodDataService} (que edita un teaching period que ya existe, con columnas
- * dinámicas por id), aquí los ids todavía no existen: cada hoja referencia sus dependencias por nombre y se resuelven
- * ("buscar o crear") a medida que se procesan las hojas. Una fila o celda incorrecta no aborta el resto.
+ * Encola la importación de la configuración completa de un profesor (la aplica {@link SchoolSetupImportProcessor}) y
+ * genera su plantilla.
  */
 public class ImportSchoolSetupService implements ImportSchoolSetupUseCase {
 
-    private final ImportBatchTracker batches;
-    private final SpreadsheetReaderPort reader;
+    private final ImportQueue queue;
     private final SpreadsheetWriterPort writer;
     private final ClassGradingConfigurer grading;
-    private final List<SchoolSetupSheetImporter> importers;
 
-    public ImportSchoolSetupService(ImportBatchTracker batches, SpreadsheetReaderPort reader,
-                                    SpreadsheetWriterPort writer, ClassGradingConfigurer grading,
-                                    List<SchoolSetupSheetImporter> importers) {
-        this.batches = batches;
-        this.reader = reader;
+    public ImportSchoolSetupService(ImportQueue queue, SpreadsheetWriterPort writer, ClassGradingConfigurer grading) {
+        this.queue = queue;
         this.writer = writer;
         this.grading = grading;
-        this.importers = SchoolSetupSheets.inSheetOrder(importers, SchoolSetupSheetImporter::sheetName);
     }
 
     @Override
-    public ImportResult importData(ImportCommands.ImportSchoolSetup command) {
-        Long teacherId = command.teacherId();
-        return batches.track(teacherId, command.fileName(), "school-setup.xlsx", command.content(), () -> {
-            SchoolSetupImportContext context = new SchoolSetupImportContext(teacherId, reader.readAll(command.content()));
-            int totalRows = 0;
-            for (SchoolSetupSheetImporter importer : importers) {
-                totalRows += importer.importSheet(context);
-            }
-            int failedRows = context.errors().failedRows();
-            return new ImportOutcome(totalRows, totalRows - failedRows, failedRows, context.errors().list());
-        });
+    public ImportBatch importData(ImportCommands.ImportSchoolSetup command) {
+        return queue.submit(new ImportRequest(command.teacherId(), ImportType.SCHOOL_SETUP, null, command.fileName(),
+                "school-setup.xlsx", command.content()));
     }
 
     @Override

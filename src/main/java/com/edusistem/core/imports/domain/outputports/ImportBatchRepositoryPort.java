@@ -1,6 +1,7 @@
 package com.edusistem.core.imports.domain.outputports;
 
 import com.edusistem.core.imports.domain.entity.ImportBatch;
+import com.edusistem.core.imports.domain.vo.ImportRowError;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.domain.vo.PageResult;
 import java.time.LocalDateTime;
@@ -17,4 +18,13 @@ public interface ImportBatchRepositoryPort {
 
     /** Importaciones terminadas antes de {@code cutoff} que aún conservan el Excel o el informe de errores. */
     List<ImportBatch> findCompletedWithFilesBefore(LocalDateTime cutoff);
+
+    /** Importaciones en cola o a medias (solo las encoladas; las síncronas antiguas se ignoran). */
+    List<ImportBatch> findUnfinished();
+
+    boolean existsUnfinishedByUserId(Long userId);
+
+    void saveErrors(Long batchId, List<ImportRowError> errors);
+
+    List<ImportRowError> findErrors(Long batchId);
 }

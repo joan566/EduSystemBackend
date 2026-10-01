@@ -1,6 +1,7 @@
 package com.edusistem.core.imports.infrastructure.entity;
 
 import com.edusistem.core.imports.domain.enums.ImportStatus;
+import com.edusistem.core.imports.domain.enums.ImportType;
 import com.edusistem.core.shared.infrastructure.entity.CreatedAtEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -29,6 +30,13 @@ public class ImportBatchEntity extends CreatedAtEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "import_type", length = 30)
+    private ImportType importType;
+
+    @Column(name = "teaching_period_id")
+    private Long teachingPeriodId;
+
     @Column(name = "file_name", nullable = false, length = 255)
     private String fileName;
 
@@ -50,6 +58,15 @@ public class ImportBatchEntity extends CreatedAtEntity {
 
     @Column(name = "error_report_path", length = 500)
     private String errorReportPath;
+
+    @Column(name = "error_code", length = 100)
+    private String errorCode;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;

@@ -5,8 +5,8 @@ import com.edusistem.core.imports.domain.inputports.ImportSchoolSetupUseCase;
 import com.edusistem.core.imports.domain.inputports.ImportStudentsUseCase;
 import com.edusistem.core.imports.domain.inputports.ImportTeachingPeriodDataUseCase;
 import com.edusistem.core.imports.domain.inputports.QueryImportUseCase;
+import com.edusistem.core.imports.presentation.dtos.ImportDtos.ImportBatchDetailsResponse;
 import com.edusistem.core.imports.presentation.dtos.ImportDtos.ImportBatchResponse;
-import com.edusistem.core.imports.presentation.dtos.ImportDtos.ImportResultResponse;
 import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.vo.PageQuery;
 import com.edusistem.core.shared.infrastructure.security.AuthenticatedUser;
@@ -36,6 +36,9 @@ import org.springframework.web.multipart.MultipartFile;
 public class ImportController {
 
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final String ASYNC = "Valida el archivo y responde de inmediato (202) con la importación en QUEUED; "
+            + "consulte GET /imports/{id} hasta que el estado sea COMPLETED, COMPLETED_WITH_ERRORS o FAILED. Si ya hay "
+            + "una importación en curso responde 409 IMPORT_IN_PROGRESS.";
 
     private final ImportStudentsUseCase importStudents;
     private final ImportTeachingPeriodDataUseCase importTeachingPeriodData;
@@ -51,18 +54,18 @@ public class ImportController {
     }
 
     @PostMapping(value = "/students", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Importa estudiantes desde un Excel (.xlsx)",
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Sube un Excel (.xlsx) de estudiantes; se importa en segundo plano",
             description = "Columnas: Número de identificación, Nombres, Apellidos, Correo electrónico, Grado, Grupo "
                     + "(opcionales: Año lectivo, Código). También se aceptan los encabezados en inglés de las "
                     + "plantillas antiguas (identification_number, first_name…). Las filas inválidas no detienen la "
-                    + "importación.")
-    public ImportResultResponse importStudents(@AuthenticationPrincipal AuthenticatedUser user,
+                    + "importación. " + ASYNC)
+    public ImportBatchResponse importStudents(@AuthenticationPrincipal AuthenticatedUser user,
                                                @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
-        return ImportResultResponse.from(importStudents.importStudents(
+        return ImportBatchResponse.from(importStudents.importStudents(
                 new ImportCommands.ImportStudents(user.id(), file.getOriginalFilename(), file.getBytes())));
     }
 
@@ -73,22 +76,22 @@ public class ImportController {
     }
 
     @PostMapping(value = "/teaching-periods/{teachingPeriodId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Importa estudiantes, notas de actividades y asistencia de un teaching period desde un Excel combinado",
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Sube el Excel combinado de un teaching period (estudiantes, notas y asistencia); se importa en segundo plano",
             description = "Hojas opcionales: Estudiantes (Número de identificación, Nombres, Apellidos, Correo "
                     + "electrónico), Notas (Número de identificación + una columna por actividad) y Asistencia (Número "
                     + "de identificación + una columna por sesión, con Presente/Ausente/Excusado). Las columnas "
                     + "dinámicas se reconocen por el #id de su encabezado. También se aceptan los nombres en inglés de "
                     + "los archivos antiguos (Students/Grades/Attendance, PRESENT/ABSENT/EXCUSED). "
                     + "GET /exports/teaching-periods/{teachingPeriodId}/full genera el archivo (con los datos actuales) "
-                    + "listo para editar y volver a subir.")
-    public ImportResultResponse importTeachingPeriodData(@AuthenticationPrincipal AuthenticatedUser user,
+                    + "listo para editar y volver a subir. " + ASYNC)
+    public ImportBatchResponse importTeachingPeriodData(@AuthenticationPrincipal AuthenticatedUser user,
                                                          @PathVariable Long teachingPeriodId,
                                                          @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
-        return ImportResultResponse.from(importTeachingPeriodData.importData(new ImportCommands.ImportTeachingPeriodData(
+        return ImportBatchResponse.from(importTeachingPeriodData.importData(new ImportCommands.ImportTeachingPeriodData(
                 user.id(), teachingPeriodId, file.getOriginalFilename(), file.getBytes())));
     }
 
@@ -105,19 +108,19 @@ public class ImportController {
     }
 
     @PostMapping(value = "/school-setup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Importa la configuración completa de un profesor desde un Excel combinado",
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Sube el Excel con la configuración completa de un profesor; se importa en segundo plano",
             description = "Crea periodos académicos, grados, materias, cursos, clases (y su escala, nota mínima y "
                     + "pesos), horarios, estudiantes, actividades, calificaciones y asistencia en una sola subida. Si "
                     + "una clase ya tiene configuración de notas y la fila trae valores, se actualiza; las celdas "
                     + "vacías no cambian nada. Los horarios idénticos no se duplican. GET /imports/school-setup/template "
-                    + "genera el archivo vacío y GET /exports/school-setup el archivo con los datos actuales.")
-    public ImportResultResponse importSchoolSetup(@AuthenticationPrincipal AuthenticatedUser user,
+                    + "genera el archivo vacío y GET /exports/school-setup el archivo con los datos actuales. " + ASYNC)
+    public ImportBatchResponse importSchoolSetup(@AuthenticationPrincipal AuthenticatedUser user,
                                                   @RequestPart("file") MultipartFile file) throws IOException {
         if (file.isEmpty()) {
             throw new InvalidRequestException("EMPTY_FILE", "El archivo subido está vacío");
         }
-        return ImportResultResponse.from(importSchoolSetup.importData(
+        return ImportBatchResponse.from(importSchoolSetup.importData(
                 new ImportCommands.ImportSchoolSetup(user.id(), file.getOriginalFilename(), file.getBytes())));
     }
 
@@ -130,9 +133,9 @@ public class ImportController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "Consulta una importación propia")
-    public ImportBatchResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
-        return ImportBatchResponse.from(queryImports.get(user.id(), id));
+    @Operation(summary = "Consulta una importación propia: estado, conteos y los primeros 500 errores por fila")
+    public ImportBatchDetailsResponse get(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long id) {
+        return ImportBatchDetailsResponse.from(queryImports.get(user.id(), id));
     }
 
     @GetMapping("/{id}/error-report")

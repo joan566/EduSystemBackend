@@ -237,11 +237,35 @@ public abstract class IntegrationTest {
             rows.add(List.of(unique("ID"), "Nombre" + i, "Apellido" + i, "alumno" + SEQ.incrementAndGet() + "@example.com",
                     c.gradeName(), c.groupName(), YEAR));
         }
-        MvcResult result = upload(t, "/api/v1/imports/students", "file", "students.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsx(IMPORT_HEADERS, rows), Map.of());
-        JsonNode body = parse(result, 201);
+        JsonNode body = runImport(t, "/api/v1/imports/students", "students.xlsx", xlsx(IMPORT_HEADERS, rows));
         assertThat(body.get("successfulRows").asInt()).isEqualTo(count);
         return listStudents(t, c.groupId());
+    }
+
+    /** Sube un Excel de importación (202, QUEUED), espera a que termine y devuelve {@code GET /imports/{id}}. */
+    protected JsonNode runImport(Teacher t, String url, String fileName, byte[] content) {
+        JsonNode accepted = parse(upload(t, url, "file", fileName,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content, Map.of()), 202);
+        assertThat(accepted.get("status").asText()).isEqualTo("QUEUED");
+        return awaitImport(t, accepted.get("id").asLong());
+    }
+
+    /** Consulta la importación hasta que termina (COMPLETED, COMPLETED_WITH_ERRORS o FAILED). */
+    protected JsonNode awaitImport(Teacher t, long importId) {
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (true) {
+            JsonNode result = get(t, "/api/v1/imports/" + importId, 200);
+            String status = result.get("status").asText();
+            if (!status.equals("QUEUED") && !status.equals("PROCESSING")) {
+                return result;
+            }
+            assertThat(System.currentTimeMillis()).as("import %d still %s", importId, status).isLessThan(deadline);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        }
     }
 
     protected List<Student> listStudents(Teacher t, long groupId) {

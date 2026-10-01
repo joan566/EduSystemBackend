@@ -27,6 +27,11 @@ public final class ImportMessages {
     public static final String STUDENT_NOT_IN_CLASS_GROUP =
             "No hay un estudiante activo con este número de identificación en el grupo de esa clase";
     public static final String SESSION_NOT_CREATED = "No se pudo crear la sesión de asistencia";
+    public static final String IMPORT_IN_PROGRESS =
+            "Ya tienes una importación en curso; espera a que termine antes de subir otro archivo";
+    public static final String FILE_UNREADABLE = "No se pudo leer el archivo subido; vuelve a subirlo";
+    public static final String UNEXPECTED_ERROR = "Ocurrió un error inesperado al procesar el archivo";
+    public static final String TEACHING_PERIOD_DELETED = "La clase se eliminó antes de procesar la importación";
 
     private ImportMessages() {
     }

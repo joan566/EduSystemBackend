@@ -104,6 +104,8 @@ edusistem:
     mark-threshold: 0.45
     ambiguity-threshold: 0.20
   imports:
+    # Importaciones de Excel que se procesan a la vez en segundo plano (cada una usa un hilo)
+    workers: ${IMPORT_WORKERS:2}
     # Días que se conservan el Excel subido y el informe de errores de una importación terminada (el resumen se conserva)
     file-retention-days: ${IMPORT_FILE_RETENTION_DAYS:30}
   submission-batches:

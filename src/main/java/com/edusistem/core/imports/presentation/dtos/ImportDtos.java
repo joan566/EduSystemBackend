@@ -1,7 +1,7 @@
 package com.edusistem.core.imports.presentation.dtos;
 
 import com.edusistem.core.imports.domain.entity.ImportBatch;
-import com.edusistem.core.imports.domain.vo.ImportResult;
+import com.edusistem.core.imports.domain.vo.ImportBatchDetails;
 import com.edusistem.core.imports.domain.vo.ImportRowError;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,14 +11,20 @@ public final class ImportDtos {
     private ImportDtos() {
     }
 
-    public record ImportBatchResponse(Long id, String fileName, String status, Integer totalRows, Integer successfulRows,
-                                      Integer failedRows, boolean hasErrorReport, LocalDateTime createdAt,
-                                      LocalDateTime completedAt) {
+    /**
+     * Resumen de una importación. {@code type} es nulo en las importaciones anteriores a la cola; {@code errorCode} y
+     * {@code errorMessage} explican un FAILED del archivo entero (no por filas).
+     */
+    public record ImportBatchResponse(Long id, String type, String fileName, String status, Integer totalRows,
+                                      Integer successfulRows, Integer failedRows, boolean hasErrorReport,
+                                      String errorCode, String errorMessage, LocalDateTime createdAt,
+                                      LocalDateTime startedAt, LocalDateTime completedAt) {
 
         public static ImportBatchResponse from(ImportBatch b) {
-            return new ImportBatchResponse(b.getId(), b.getFileName(), b.getStatus().name(), b.getTotalRows(),
-                    b.getSuccessfulRows(), b.getFailedRows(), b.getErrorReportPath() != null, b.getCreatedAt(),
-                    b.getCompletedAt());
+            return new ImportBatchResponse(b.getId(), b.getImportType() == null ? null : b.getImportType().name(),
+                    b.getFileName(), b.getStatus().name(), b.getTotalRows(), b.getSuccessfulRows(), b.getFailedRows(),
+                    b.getErrorReportPath() != null, b.getErrorCode(), b.getErrorMessage(), b.getCreatedAt(),
+                    b.getStartedAt(), b.getCompletedAt());
         }
     }
 
@@ -29,14 +35,19 @@ public final class ImportDtos {
         }
     }
 
-    /** {@code totalRows}, {@code successfulRows}, {@code failedRows} y {@code errors}, como pide el contrato. */
-    public record ImportResultResponse(Long id, String status, Integer totalRows, Integer successfulRows,
-                                       Integer failedRows, List<RowErrorResponse> errors, boolean errorsTruncated) {
+    /** El resumen más los primeros errores por fila; el detalle completo está en {@code /error-report}. */
+    public record ImportBatchDetailsResponse(Long id, String type, String fileName, String status, Integer totalRows,
+                                             Integer successfulRows, Integer failedRows, boolean hasErrorReport,
+                                             String errorCode, String errorMessage, LocalDateTime createdAt,
+                                             LocalDateTime startedAt, LocalDateTime completedAt,
+                                             List<RowErrorResponse> errors, boolean errorsTruncated) {
 
-        public static ImportResultResponse from(ImportResult r) {
-            ImportBatch b = r.batch();
-            return new ImportResultResponse(b.getId(), b.getStatus().name(), b.getTotalRows(), b.getSuccessfulRows(),
-                    b.getFailedRows(), r.errors().stream().map(RowErrorResponse::from).toList(), r.errorsTruncated());
+        public static ImportBatchDetailsResponse from(ImportBatchDetails d) {
+            ImportBatchResponse b = ImportBatchResponse.from(d.batch());
+            return new ImportBatchDetailsResponse(b.id(), b.type(), b.fileName(), b.status(), b.totalRows(),
+                    b.successfulRows(), b.failedRows(), b.hasErrorReport(), b.errorCode(), b.errorMessage(),
+                    b.createdAt(), b.startedAt(), b.completedAt(),
+                    d.errors().stream().map(RowErrorResponse::from).toList(), d.errorsTruncated());
         }
     }
 }

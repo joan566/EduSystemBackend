@@ -1,190 +1,38 @@
 package com.edusistem.core.imports.application.use_case.service;
 
-import com.edusistem.core.academic.domain.entity.Group;
-import com.edusistem.core.academic.domain.outputports.GradeRepositoryPort;
-import com.edusistem.core.academic.domain.outputports.GroupRepositoryPort;
-import com.edusistem.core.imports.application.contracts.ImportBatchTracker;
-import com.edusistem.core.imports.application.contracts.ImportBatchTracker.ImportOutcome;
-import com.edusistem.core.imports.application.student.StudentImportApplier;
-import com.edusistem.core.imports.application.student.StudentImportRow;
-import com.edusistem.core.imports.application.support.ImportMessages;
-import com.edusistem.core.imports.application.support.RowErrors;
-import com.edusistem.core.imports.application.support.RowReader;
-import com.edusistem.core.imports.application.use_case.dtos.ImportCommands;
-import com.edusistem.core.imports.domain.inputports.ImportStudentsUseCase;
-import com.edusistem.core.imports.domain.outputports.SpreadsheetReaderPort;
-import com.edusistem.core.imports.domain.vo.ImportResult;
-import com.edusistem.core.imports.domain.vo.ImportRowError;
-import com.edusistem.core.imports.domain.vo.ParsedSheet;
-import com.edusistem.core.imports.domain.vo.SpreadsheetRow;
-import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
-import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
-import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary.SheetSpec;
-import com.edusistem.core.student.domain.entity.Student;
-import com.edusistem.core.student.domain.outputports.StudentRepositoryPort;
-import java.time.Clock;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import static com.edusistem.core.imports.application.student.StudentImportSheet.SHEET;
+import static com.edusistem.core.imports.application.student.StudentImportSheet.TEMPLATE_COLUMNS;
 
-/**
- * Importación de estudiantes desde Excel. Una fila incorrecta no aborta la importación: se valida todo, se aplican
- * (en una sola transacción) las filas válidas y se registra el resultado en import_batches con el detalle de errores.
- */
+import com.edusistem.core.imports.application.contracts.ImportQueue;
+import com.edusistem.core.imports.application.contracts.ImportQueue.ImportRequest;
+import com.edusistem.core.imports.application.student.StudentsImportProcessor;
+import com.edusistem.core.imports.application.use_case.dtos.ImportCommands;
+import com.edusistem.core.imports.domain.entity.ImportBatch;
+import com.edusistem.core.imports.domain.enums.ImportType;
+import com.edusistem.core.imports.domain.inputports.ImportStudentsUseCase;
+import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
+import java.util.List;
+
+/** Encola la importación de estudiantes (la aplica {@link StudentsImportProcessor}) y genera su plantilla. */
 public class ImportStudentsService implements ImportStudentsUseCase {
 
-    static final List<String> REQUIRED_COLUMNS = List.of("identification_number", "first_name", "last_name", "grade", "group");
-    static final List<String> TEMPLATE_COLUMNS = List.of("identification_number", "first_name", "last_name", "email",
-            "grade", "group", "academic_year");
-    /** Encabezados en español; al leer también se aceptan las claves en inglés de las plantillas antiguas. */
-    static final SheetSpec SHEET = new SheetSpec("Students", "Estudiantes", Map.of(
-            "identification_number", "Número de identificación",
-            "student_code", "Código",
-            "first_name", "Nombres",
-            "last_name", "Apellidos",
-            "email", "Correo electrónico",
-            "grade", "Grado",
-            "group", "Grupo",
-            "academic_year", "Año lectivo"));
-    private static final int MAX_ROWS = 5000;
-
-    private final ImportBatchTracker batches;
-    private final SpreadsheetReaderPort reader;
+    private final ImportQueue queue;
     private final SpreadsheetWriterPort writer;
-    private final StudentRepositoryPort students;
-    private final GradeRepositoryPort grades;
-    private final GroupRepositoryPort groups;
-    private final StudentImportApplier applier;
-    private final Clock clock;
 
-    public ImportStudentsService(ImportBatchTracker batches, SpreadsheetReaderPort reader, SpreadsheetWriterPort writer,
-                                 StudentRepositoryPort students, GradeRepositoryPort grades, GroupRepositoryPort groups,
-                                 StudentImportApplier applier, Clock clock) {
-        this.batches = batches;
-        this.reader = reader;
+    public ImportStudentsService(ImportQueue queue, SpreadsheetWriterPort writer) {
+        this.queue = queue;
         this.writer = writer;
-        this.students = students;
-        this.grades = grades;
-        this.groups = groups;
-        this.applier = applier;
-        this.clock = clock;
     }
 
     @Override
-    public ImportResult importStudents(ImportCommands.ImportStudents command) {
-        Long teacherId = command.teacherId();
-        return batches.track(teacherId, command.fileName(), "students.xlsx", command.content(), () -> {
-            ParsedSheet sheet = reader.read(command.content()).canonicalize(SHEET);
-            requireColumns(sheet);
-            if (sheet.rows().size() > MAX_ROWS) {
-                throw new InvalidRequestException("TOO_MANY_ROWS", ImportMessages.tooManyRows(MAX_ROWS));
-            }
-            RowErrors errors = new RowErrors();
-            List<StudentImportRow> valid = validate(teacherId, sheet.rows(), errors);
-            applier.apply(teacherId, valid);
-            // una fila puede tener varios errores: cuenta una vez
-            int failedRows = (int) errors.list().stream().map(ImportRowError::rowNumber).distinct().count();
-            return new ImportOutcome(sheet.rows().size(), valid.size(), failedRows, errors.list());
-        });
+    public ImportBatch importStudents(ImportCommands.ImportStudents command) {
+        return queue.submit(new ImportRequest(command.teacherId(), ImportType.STUDENTS, null, command.fileName(),
+                "students.xlsx", command.content()));
     }
 
     @Override
     public byte[] template() {
         return writer.write(SHEET.table(TEMPLATE_COLUMNS, List.of(
                 List.<Object>of("1001234567", "Ana", "Pérez", "ana.perez@example.com", "10°", "A", 2026))));
-    }
-
-    // ------------------------------------------------------------------ validación
-
-    private void requireColumns(ParsedSheet sheet) {
-        List<String> missing = REQUIRED_COLUMNS.stream().filter(c -> !sheet.headers().contains(c)).toList();
-        if (!missing.isEmpty()) {
-            throw new InvalidRequestException("MISSING_COLUMNS",
-                    "Faltan columnas obligatorias: " + String.join(", ", SHEET.headers(missing))
-                            + ". Columnas esperadas: " + String.join(", ", SHEET.headers(TEMPLATE_COLUMNS)));
-        }
-    }
-
-    private List<StudentImportRow> validate(Long teacherId, List<SpreadsheetRow> rows, RowErrors errors) {
-        List<StudentImportRow> valid = new ArrayList<>();
-        Map<String, Integer> seenIdentifications = new HashMap<>();
-        Map<String, Integer> seenCodes = new HashMap<>();
-        Map<String, Optional<Long>> groupCache = new HashMap<>();
-        int currentYear = LocalDateTime.now(clock).getYear();
-
-        for (SpreadsheetRow sheetRow : rows) {
-            RowReader row = RowReader.headerOnly(sheetRow, SHEET, errors);
-            int before = errors.size();
-            String identification = row.required("identification_number", 50);
-            String firstName = row.required("first_name", 100);
-            String lastName = row.required("last_name", 100);
-            String gradeName = row.required("grade", 50);
-            String groupName = row.required("group", 50);
-            String email = row.optionalEmail("email");
-            String code = row.raw("student_code");
-            if (code != null && code.length() > 50) {
-                row.error("student_code", ImportMessages.maxLength(50));
-            }
-            int year = row.optionalYear("academic_year", currentYear);
-            if (identification != null) {
-                Integer first = seenIdentifications.putIfAbsent(identification, row.rowNumber());
-                if (first != null) {
-                    row.error("identification_number", ImportMessages.duplicatedInFile(first));
-                }
-            }
-            if (code != null) {
-                Integer first = seenCodes.putIfAbsent(code, row.rowNumber());
-                if (first != null) {
-                    row.error("student_code", ImportMessages.duplicatedInFile(first));
-                }
-            }
-            Long groupId = null;
-            if (gradeName != null && groupName != null && errors.size() == before) {
-                groupId = resolveGroup(row, gradeName, groupName, year, groupCache, teacherId);
-            }
-            if (errors.size() > before) {
-                continue;
-            }
-            resolveStudent(row, teacherId, identification, code, firstName, lastName, email, groupId)
-                    .ifPresent(valid::add);
-        }
-        return valid;
-    }
-
-    private Long resolveGroup(RowReader row, String gradeName, String groupName, int year,
-                              Map<String, Optional<Long>> cache, Long teacherId) {
-        String key = gradeName + "|" + groupName + "|" + year;
-        Optional<Long> groupId = cache.computeIfAbsent(key,
-                k -> groups.findByGradeNameAndNameAndAcademicYear(teacherId, gradeName, groupName, year).map(Group::getId));
-        if (groupId.isEmpty()) {
-            boolean gradeExists = grades.findByTeacherIdAndName(teacherId, gradeName).isPresent();
-            row.error(gradeExists ? "group" : "grade", gradeExists
-                    ? "El grupo '" + groupName + "' no existe en el grado '" + gradeName + "' para " + year
-                    : "El grado '" + gradeName + "' no existe");
-            return null;
-        }
-        return groupId.get();
-    }
-
-    /** Decide crear o reutilizar (y actualizar) a un estudiante del propio profesor. */
-    private Optional<StudentImportRow> resolveStudent(RowReader row, Long teacherId, String identification,
-                                                      String code, String firstName, String lastName, String email,
-                                                      Long groupId) {
-        Optional<Student> byIdentification = students.findByTeacherIdAndIdentificationNumber(teacherId, identification);
-        Optional<Student> byCode = code == null ? Optional.empty() : students.findByTeacherIdAndStudentCode(teacherId, code);
-        if (byIdentification.isPresent() && byCode.isPresent() && !byIdentification.get().getId().equals(byCode.get().getId())) {
-            row.error("student_code", "El código pertenece a un estudiante distinto al del número de identificación");
-            return Optional.empty();
-        }
-        if (byIdentification.isEmpty() && byCode.isPresent()) {
-            row.error("student_code", "El código ya lo usa otro estudiante");
-            return Optional.empty();
-        }
-        Long existingId = byIdentification.map(Student::getId).orElse(null);
-        return Optional.of(new StudentImportRow(row.rowNumber(), existingId, identification, code, firstName,
-                lastName, email, groupId));
     }
 }

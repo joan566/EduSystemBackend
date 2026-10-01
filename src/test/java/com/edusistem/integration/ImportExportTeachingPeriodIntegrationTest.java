@@ -25,7 +25,11 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
         return result.getResponse().getContentAsByteArray();
     }
 
+    /** Con 202 espera a que termine la importación y devuelve {@code GET /imports/{id}}. */
     private JsonNode uploadFull(Teacher t, long teachingPeriodId, byte[] content, int status) {
+        if (status == 202) {
+            return runImport(t, "/api/v1/imports/teaching-periods/" + teachingPeriodId, "full.xlsx", content);
+        }
         MvcResult result = upload(t, "/api/v1/imports/teaching-periods/" + teachingPeriodId, "file", "full.xlsx", XLSX,
                 content, Map.of());
         return parse(result, status);
@@ -80,7 +84,7 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 new TabularData("Notas", List.of(idHeader, gradeHeader), gradeRows),
                 new TabularData("Asistencia", List.of(idHeader, attendanceHeader), attendanceRows)));
 
-        JsonNode result = uploadFull(t, c.teachingPeriodId(), reupload, 201);
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), reupload, 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("failedRows").asInt()).isZero();
         assertThat(result.get("totalRows").asInt()).isEqualTo(7); // 3 students + 2 grades + 2 attendance
@@ -122,7 +126,7 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
         byte[] upload = xlsxWorkbook(List.of(new TabularData("Notas", List.of("Número de identificación", gradeHeader),
                 List.of(List.<Object>of(s1.identification(), "10"), List.<Object>of(s2.identification(), "3")))));
 
-        JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 201);
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 202);
         assertThat(result.get("failedRows").asInt()).isEqualTo(1);
         assertThat(result.get("successfulRows").asInt()).isEqualTo(1);
         assertThat(result.get("errors").toString()).contains("Notas:Quiz").contains("Debe estar entre 0 y 5");
@@ -157,7 +161,7 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
                 new TabularData("Attendance", List.of("identification_number", "last_name", "first_name",
                         YEAR + "-02-01 #" + sessionId), List.of(List.<Object>of(s.identification(), "A", "N", "EXCUSED")))));
 
-        JsonNode result = uploadFull(t, c.teachingPeriodId(), legacy, 201);
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), legacy, 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(result.get("successfulRows").asInt()).isEqualTo(3);
         assertThat(gradeOf(t, activityId, s.id())).isEqualTo(3.5);
@@ -178,7 +182,7 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
 
         byte[] upload = xlsxWorkbook(List.of(new TabularData("Notas", List.of("Número de identificación", gradeHeader),
                 List.of(List.<Object>of(s.identification(), "4")))));
-        JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 201);
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), upload, 202);
         assertThat(result.get("errors")).isEmpty();
         assertThat(gradeOf(t, activityId, s.id())).isEqualTo(4.0);
     }
@@ -206,7 +210,7 @@ class ImportExportTeachingPeriodIntegrationTest extends IntegrationTest {
         Teacher t = newTeacher();
         Context c = newContext(t);
         byte[] empty = xlsxWorkbook(List.of(new TabularData("Notes", List.of("anything"), List.of())));
-        JsonNode result = uploadFull(t, c.teachingPeriodId(), empty, 201);
+        JsonNode result = uploadFull(t, c.teachingPeriodId(), empty, 202);
         assertThat(result.get("totalRows").asInt()).isZero();
         assertThat(result.get("status").asText()).isEqualTo("COMPLETED");
     }

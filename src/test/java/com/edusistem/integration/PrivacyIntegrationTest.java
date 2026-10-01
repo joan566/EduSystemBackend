@@ -131,8 +131,7 @@ class PrivacyIntegrationTest extends IntegrationTest {
         byte[] file = xlsx(IMPORT_HEADERS, List.of(
                 List.of(unique("ID"), "Ana", "Pérez", "", c.gradeName(), c.groupName(), YEAR),
                 List.of("", "", "", "", c.gradeName(), c.groupName(), YEAR))); // fila con errores
-        long batchId = parse(upload(t, "/api/v1/imports/students", "file", "s.xlsx", XLSX, file, Map.of()), 201)
-                .get("id").asLong();
+        long batchId = runImport(t, "/api/v1/imports/students", "s.xlsx", file).get("id").asLong();
         String filePath = jdbc.queryForObject("select file_path from import_batches where id = ?", String.class, batchId);
         String reportPath = jdbc.queryForObject("select error_report_path from import_batches where id = ?", String.class,
                 batchId);

@@ -3,20 +3,18 @@ package com.edusistem.core.imports.application.batch;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.imports.application.contracts.ImportBatchTracker;
-import com.edusistem.core.imports.application.support.ImportMessages;
+import com.edusistem.core.imports.application.contracts.ImportOutcome;
 import com.edusistem.core.imports.domain.entity.ImportBatch;
 import com.edusistem.core.imports.domain.enums.ImportStatus;
 import com.edusistem.core.imports.domain.outputports.ImportBatchRepositoryPort;
-import com.edusistem.core.imports.domain.vo.ImportResult;
+import com.edusistem.core.imports.domain.vo.ImportBatchDetails;
 import com.edusistem.core.imports.domain.vo.ImportRowError;
-import com.edusistem.core.shared.domain.exceptions.InvalidRequestException;
 import com.edusistem.core.shared.domain.outputports.FileStoragePort;
 import com.edusistem.core.shared.domain.outputports.SpreadsheetWriterPort;
 import com.edusistem.core.shared.domain.vo.SpreadsheetVocabulary;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,8 +25,8 @@ import org.slf4j.LoggerFactory;
 public class DefaultImportBatchTracker implements ImportBatchTracker {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultImportBatchTracker.class);
-    private static final int MAX_RETURNED_ERRORS = 500;
-    private static final int MAX_FILE_NAME = 255;
+    /** Uno más de los que se devuelven, para saber si la lista está truncada; todos quedan en el reporte en Excel. */
+    private static final int MAX_STORED_ERRORS = ImportBatchDetails.MAX_ERRORS + 1;
 
     private final ImportBatchRepositoryPort batches;
     private final FileStoragePort storage;
@@ -46,24 +44,7 @@ public class DefaultImportBatchTracker implements ImportBatchTracker {
     }
 
     @Override
-    public ImportResult track(Long teacherId, String fileName, String defaultFileName, byte[] content, ImportJob job) {
-        String name = fileName == null ? defaultFileName : fileName;
-        if (!name.toLowerCase(Locale.ROOT).endsWith(".xlsx") || !looksLikeZip(content)) {
-            throw new InvalidRequestException("INVALID_FILE_TYPE", ImportMessages.ONLY_XLSX);
-        }
-        ImportBatch batch = batches.save(ImportBatch.builder().userId(teacherId)
-                .fileName(name.length() > MAX_FILE_NAME ? name.substring(0, MAX_FILE_NAME) : name)
-                .filePath(storage.store("imports", name, content))
-                .status(ImportStatus.PROCESSING).build());
-        try {
-            return finish(batch, teacherId, job.run());
-        } catch (RuntimeException e) {
-            fail(batch, teacherId, e);
-            throw e;
-        }
-    }
-
-    private ImportResult finish(ImportBatch batch, Long userId, ImportOutcome outcome) {
+    public void complete(ImportBatch batch, ImportOutcome outcome) {
         int total = outcome.totalRows();
         int successful = outcome.successfulRows();
         int failedRows = outcome.failedRows();
@@ -79,27 +60,22 @@ public class DefaultImportBatchTracker implements ImportBatchTracker {
                     .map(e -> List.<Object>of(e.rowNumber(), e.column() == null ? "" : e.column(), e.message())).toList();
             batch.setErrorReportPath(storage.store("imports/errors", "import-errors.xlsx",
                     writer.write(SpreadsheetVocabulary.ERRORS.table(List.of("row", "column", "error"), lines))));
+            batches.saveErrors(batch.getId(), errors.subList(0, Math.min(errors.size(), MAX_STORED_ERRORS)));
         }
         ImportBatch saved = batches.save(batch);
-        audit.success(userId, AuditAction.IMPORT, "ImportBatch", saved.getId(),
+        audit.success(batch.getUserId(), AuditAction.IMPORT, "ImportBatch", saved.getId(),
                 "rows " + total + ", ok " + successful + ", failed " + failedRows);
-        boolean truncated = errors.size() > MAX_RETURNED_ERRORS;
-        return new ImportResult(saved, truncated ? errors.subList(0, MAX_RETURNED_ERRORS) : errors, truncated);
     }
 
-    private void fail(ImportBatch batch, Long userId, RuntimeException cause) {
-        log.warn("Import {} failed: {}", batch.getId(), cause.getMessage());
+    @Override
+    public void fail(ImportBatch batch, String code, String message) {
+        log.warn("Import {} failed: {}", batch.getId(), message);
+        batch.fail(code, message, LocalDateTime.now(clock));
         try {
-            batch.setStatus(ImportStatus.FAILED);
-            batch.setCompletedAt(LocalDateTime.now(clock));
             batches.save(batch);
         } catch (RuntimeException e) {
             log.error("Could not mark import batch {} as failed", batch.getId(), e);
         }
-        audit.failure(userId, AuditAction.IMPORT, "ImportBatch", batch.getId(), cause.getMessage());
-    }
-
-    private static boolean looksLikeZip(byte[] content) {
-        return content != null && content.length > 4 && content[0] == 'P' && content[1] == 'K';
+        audit.failure(batch.getUserId(), AuditAction.IMPORT, "ImportBatch", batch.getId(), message);
     }
 }
