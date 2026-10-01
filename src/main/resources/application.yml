@@ -70,6 +70,11 @@ edusistem:
   cors:
     # Orígenes permitidos separados por coma (admite patrones: https://*.miapp.com). Vacío = CORS deshabilitado.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+  app-version:
+    # Versiones de la app móvil (X.Y.Z) que consulta GET /api/v1/app/version. Por debajo de minimum la actualización
+    # es obligatoria; entre minimum y latest es opcional. Si son inválidas o minimum > latest, la app no arranca.
+    latest: ${APP_LATEST_VERSION:1.0.0}
+    minimum: ${APP_MINIMUM_VERSION:1.0.0}
   school:
     # Zona horaria IANA del colegio: define qué día es "hoy" en la agenda del profesor.
     timezone: ${SCHOOL_TIMEZONE:America/Bogota}

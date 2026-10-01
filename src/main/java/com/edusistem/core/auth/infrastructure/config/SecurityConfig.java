@@ -54,6 +54,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, PUBLIC_AUTH).permitAll()
                         .requestMatchers(DOCS).permitAll()
+                        // Versión de la app móvil: se consulta antes de iniciar sesión.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/app/version").permitAll()
                         // Cuenta propia: cualquier usuario autenticado.
                         .requestMatchers("/api/v1/auth/**", "/api/v1/users/**").authenticated()
                         // Resto de la API: roles con acceso al dominio académico.

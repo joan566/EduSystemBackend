@@ -42,6 +42,8 @@ Los tests no usan `.env`: fijan sus propios valores y siempre desactivan el corr
 | `API_DOCS_ENABLED` | no (`false`) | Swagger UI y `/v3/api-docs`; solo en desarrollo |
 | `FORWARD_HEADERS_STRATEGY` | no (`none`) | `native` detrás de un proxy inverso (IP real del cliente para los límites); `none` sin proxy |
 | `SCHOOL_TIMEZONE` | no (`America/Bogota`) | Zona horaria IANA del colegio; define qué día es "hoy" en `/schedule/today` y el `serverTime` de la agenda |
+| `APP_LATEST_VERSION` | no (`1.0.0`) | Última versión publicada de la app móvil (X.Y.Z), expuesta en `GET /api/v1/app/version` |
+| `APP_MINIMUM_VERSION` | no (`1.0.0`) | Versión mínima permitida; por debajo la actualización es obligatoria. Inválida o mayor que la última = la app no arranca |
 | `MAIL_ENABLED` | no (`false`) | Si es `true` envía el código de recuperación por SMTP |
 | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | solo con correo | SMTP |
 | `SERVER_PORT` | no (`8080`) | Puerto HTTP |
