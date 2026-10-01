@@ -3,6 +3,7 @@ package com.edusistem.core.auth.presentation.controllers;
 import com.edusistem.core.auth.application.use_case.dtos.AuthCommands;
 import com.edusistem.core.auth.domain.inputports.ChangePasswordUseCase;
 import com.edusistem.core.auth.domain.inputports.DeleteAccountUseCase;
+import com.edusistem.core.auth.domain.inputports.EmailVerificationUseCase;
 import com.edusistem.core.auth.domain.inputports.LoginUseCase;
 import com.edusistem.core.auth.domain.inputports.PasswordRecoveryUseCase;
 import com.edusistem.core.auth.domain.inputports.RefreshSessionUseCase;
@@ -13,10 +14,13 @@ import com.edusistem.core.auth.presentation.dtos.AuthRequests.ForgotPasswordRequ
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.LoginRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.RefreshRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.RegisterRequest;
+import com.edusistem.core.auth.presentation.dtos.AuthRequests.ResendVerificationRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.ResetPasswordRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthRequests.VerifyCodeRequest;
+import com.edusistem.core.auth.presentation.dtos.AuthRequests.VerifyEmailRequest;
 import com.edusistem.core.auth.presentation.dtos.AuthResponse;
 import com.edusistem.core.auth.presentation.dtos.MessageResponse;
+import com.edusistem.core.auth.presentation.dtos.RegisterResponse;
 import com.edusistem.core.shared.infrastructure.security.AuthenticatedUser;
 import com.edusistem.core.user.domain.inputports.GetCurrentUserUseCase;
 import com.edusistem.core.user.presentation.dtos.UserResponse;
@@ -47,10 +51,12 @@ public class AuthController {
     private final GetCurrentUserUseCase currentUser;
     private final RefreshSessionUseCase refresh;
     private final DeleteAccountUseCase deleteAccount;
+    private final EmailVerificationUseCase emailVerification;
 
     public AuthController(RegisterUserUseCase register, LoginUseCase login, ChangePasswordUseCase changePassword,
                           PasswordRecoveryUseCase recovery, GetCurrentUserUseCase currentUser,
-                          RefreshSessionUseCase refresh, DeleteAccountUseCase deleteAccount) {
+                          RefreshSessionUseCase refresh, DeleteAccountUseCase deleteAccount,
+                          EmailVerificationUseCase emailVerification) {
         this.register = register;
         this.login = login;
         this.changePassword = changePassword;
@@ -58,21 +64,47 @@ public class AuthController {
         this.currentUser = currentUser;
         this.refresh = refresh;
         this.deleteAccount = deleteAccount;
+        this.emailVerification = emailVerification;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @SecurityRequirements
-    @Operation(summary = "Registra una cuenta de profesor y devuelve la sesión",
-            description = "Limitado por IP: al superarlo responde 429 con cabecera Retry-After.")
-    public AuthResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
-        return AuthResponse.from(register.register(request.toCommand(http.getRemoteAddr())));
+    @Operation(summary = "Registra una cuenta de profesor sin verificar y envía un código al correo",
+            description = "No inicia sesión: hay que verificar el correo (POST /verify-email) y luego hacer login. "
+                    + "Limitado por IP: al superarlo responde 429 con cabecera Retry-After.")
+    public RegisterResponse register(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
+        return RegisterResponse.from(register.register(request.toCommand(http.getRemoteAddr())));
+    }
+
+    @PostMapping("/verify-email")
+    @SecurityRequirements
+    @Operation(summary = "Verifica el correo de una cuenta nueva con el código recibido",
+            description = "Limitado por correo y por IP: al superarlo responde 429 con cabecera Retry-After.")
+    public MessageResponse verifyEmail(@Valid @RequestBody VerifyEmailRequest request, HttpServletRequest http) {
+        emailVerification.verifyEmail(new AuthCommands.VerifyEmail(request.email(), request.code(),
+                http.getRemoteAddr()));
+        return new MessageResponse("Email verified");
+    }
+
+    @PostMapping("/resend-verification")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @SecurityRequirements
+    @Operation(summary = "Envía un nuevo código de verificación (el anterior deja de valer; respuesta idéntica "
+            + "exista o no el correo)",
+            description = "Limitado por correo y por IP: al superarlo responde 429 con cabecera Retry-After.")
+    public MessageResponse resendVerification(@Valid @RequestBody ResendVerificationRequest request,
+                                              HttpServletRequest http) {
+        emailVerification.resendVerification(new AuthCommands.ResendVerification(request.email(),
+                http.getRemoteAddr()));
+        return new MessageResponse("If the email is registered and pending verification, a new code has been sent");
     }
 
     @PostMapping("/login")
     @SecurityRequirements
     @Operation(summary = "Inicia sesión y devuelve access token (JWT) y refresh token",
-            description = "Tras varios intentos fallidos responde 429 con cabecera Retry-After.")
+            description = "Con credenciales correctas pero correo sin verificar responde 403 EMAIL_NOT_VERIFIED. "
+                    + "Tras varios intentos fallidos responde 429 con cabecera Retry-After.")
     public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest http) {
         return AuthResponse.from(login.login(request.toCommand(http.getRemoteAddr())));
     }

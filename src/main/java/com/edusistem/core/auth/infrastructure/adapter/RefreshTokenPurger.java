@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Limpieza diaria de refresh tokens vencidos hace más de 7 días y de códigos de recuperación vencidos. */
+/** Limpieza diaria de refresh tokens vencidos hace más de 7 días y de códigos (recuperación/verificación) vencidos. */
 @Component
 public class RefreshTokenPurger {
 

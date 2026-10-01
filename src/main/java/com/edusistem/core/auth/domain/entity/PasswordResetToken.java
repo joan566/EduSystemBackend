@@ -1,5 +1,6 @@
 package com.edusistem.core.auth.domain.entity;
 
+import com.edusistem.core.auth.domain.enums.OneTimeCodePurpose;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,6 +16,8 @@ import lombok.Setter;
 public class PasswordResetToken {
     private Long id;
     private Long userId;
+    @Builder.Default
+    private OneTimeCodePurpose purpose = OneTimeCodePurpose.PASSWORD_RESET;
     private String codeHash;
     private LocalDateTime expiresAt;
     private LocalDateTime usedAt;

@@ -3,8 +3,10 @@ package com.edusistem.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.edusistem.core.auth.domain.outputports.MailSenderPort;
@@ -28,18 +30,143 @@ class AuthIntegrationTest extends IntegrationTest {
     }
 
     @Test
-    void registerCreatesTeacherReturnsSessionAndStoresOnlyAHash() {
+    void registerCreatesAnUnverifiedTeacherWithoutSessionAndEmailsAVerificationCode() {
         String email = unique("reg") + "@example.com";
         JsonNode body = call("POST", null, "/api/v1/auth/register", registration(email), 201);
 
-        assertThat(body.get("tokenType").asText()).isEqualTo("Bearer");
-        assertThat(body.get("accessToken").asText()).isNotBlank();
+        assertThat(body.has("accessToken")).isFalse();
+        assertThat(body.has("refreshToken")).isFalse();
         assertThat(body.get("user").get("email").asText()).isEqualTo(email);
+        assertThat(body.get("user").get("emailVerified").asBoolean()).isFalse();
         assertThat(body.get("user").get("roles").get(0).asText()).isEqualTo("TEACHER");
         assertThat(body.toString()).doesNotContain(PASSWORD).doesNotContain("password");
 
         String stored = jdbc.queryForObject("select password_hash from users where email = ?", String.class, email);
         assertThat(stored).isNotEqualTo(PASSWORD).startsWith("$2");
+        assertThat(jdbc.queryForObject("select email_verified from users where email = ?", Boolean.class, email)).isFalse();
+
+        String code = verificationCodeSentTo(email);
+        assertThat(code).matches("\\d{6}");
+        String codeHash = jdbc.queryForObject("""
+                select t.code_hash from password_reset_tokens t join users u on u.id = t.user_id
+                where u.email = ? and t.purpose = 'EMAIL_VERIFICATION'""", String.class, email);
+        assertThat(codeHash).isNotEqualTo(code).startsWith("$2");
+        assertThat(body.toString()).doesNotContain(code);
+    }
+
+    private String verificationCodeSentTo(String email) {
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(mailSender, atLeastOnce()).sendEmailVerificationCode(eq(email), code.capture(), anyInt());
+        return code.getValue(); // el último enviado
+    }
+
+    private static String wrongCode(String code) {
+        return code.equals("000000") ? "111111" : "000000";
+    }
+
+    private JsonNode verifyEmail(String email, String code, int status) {
+        return call("POST", null, "/api/v1/auth/verify-email", Map.of("email", email, "code", code), status);
+    }
+
+    private JsonNode login(String email, int status) {
+        return call("POST", null, "/api/v1/auth/login", Map.of("email", email, "password", PASSWORD), status);
+    }
+
+    @Test
+    void unverifiedTeacherCannotLogInUntilTheEmailIsVerifiedAndTheCodeIsSingleUse() {
+        String email = unique("ver") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        String code = verificationCodeSentTo(email);
+
+        assertError(login(email, 403), 403, "EMAIL_NOT_VERIFIED");
+        // con contraseña errónea no se revela que la cuenta existe ni su estado
+        assertError(call("POST", null, "/api/v1/auth/login", Map.of("email", email, "password", "Wrong1234"), 401),
+                401, "INVALID_CREDENTIALS");
+
+        assertError(verifyEmail(email, wrongCode(code), 400), 400, "INVALID_VERIFICATION_CODE");
+        assertThat(verifyEmail(email, code, 200).get("message").asText()).isEqualTo("Email verified");
+        assertThat(jdbc.queryForObject("select email_verified from users where email = ?", Boolean.class, email)).isTrue();
+
+        JsonNode session = login(email, 200);
+        assertThat(session.get("accessToken").asText()).isNotBlank();
+        assertThat(session.get("user").get("emailVerified").asBoolean()).isTrue();
+        // el código ya consumido no vuelve a servir
+        assertError(verifyEmail(email, code, 400), 400, "INVALID_VERIFICATION_CODE");
+    }
+
+    @Test
+    void expiredVerificationCodeIsRejected() {
+        String email = unique("exp") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        String code = verificationCodeSentTo(email);
+        jdbc.update("""
+                update password_reset_tokens set expires_at = now() - interval '1 minute'
+                where user_id = (select id from users where email = ?)""", email);
+
+        assertError(verifyEmail(email, code, 400), 400, "INVALID_VERIFICATION_CODE");
+        assertError(login(email, 403), 403, "EMAIL_NOT_VERIFIED");
+    }
+
+    @Test
+    void verificationCodeIsLockedAfterTooManyWrongAttempts() {
+        String email = unique("lock") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        String code = verificationCodeSentTo(email);
+        for (int i = 0; i < 5; i++) {
+            verifyEmail(email, wrongCode(code), 400);
+        }
+        assertError(verifyEmail(email, code, 400), 400, "INVALID_VERIFICATION_CODE");
+    }
+
+    @Test
+    void resendingTheVerificationCodeInvalidatesThePreviousOne() {
+        String email = unique("res") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        String first = verificationCodeSentTo(email);
+
+        call("POST", null, "/api/v1/auth/resend-verification", Map.of("email", email), 202);
+        String second = verificationCodeSentTo(email);
+        verify(mailSender, times(2)).sendEmailVerificationCode(eq(email), ArgumentMatchers.anyString(), anyInt());
+
+        if (!first.equals(second)) {
+            assertError(verifyEmail(email, first, 400), 400, "INVALID_VERIFICATION_CODE");
+        }
+        verifyEmail(email, second, 200);
+        login(email, 200);
+    }
+
+    @Test
+    void passwordResetCodesDoNotInvalidateTheVerificationCode() {
+        String email = unique("mix") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        String code = verificationCodeSentTo(email);
+        call("POST", null, "/api/v1/auth/forgot-password", Map.of("email", email), 202);
+        verifyEmail(email, code, 200);
+    }
+
+    @Test
+    void resendVerificationDoesNotRevealWhetherTheEmailExistsOrIsVerified() {
+        Teacher verified = newTeacher();
+        JsonNode unknown = call("POST", null, "/api/v1/auth/resend-verification",
+                Map.of("email", "nobody" + unique("") + "@example.com"), 202);
+        JsonNode alreadyVerified = call("POST", null, "/api/v1/auth/resend-verification",
+                Map.of("email", verified.email()), 202);
+        assertThat(unknown.get("message").asText()).isEqualTo(alreadyVerified.get("message").asText());
+        verify(mailSender, times(1)).sendEmailVerificationCode(eq(verified.email()), ArgumentMatchers.anyString(),
+                anyInt()); // solo el del registro
+        assertError(verifyEmail(verified.email(), "123456", 400), 400, "INVALID_VERIFICATION_CODE");
+    }
+
+    @Test
+    void resendVerificationIsRateLimitedPerEmail() {
+        String email = unique("rl") + "@example.com";
+        call("POST", null, "/api/v1/auth/register", registration(email), 201);
+        for (int i = 0; i < 3; i++) {
+            call("POST", null, "/api/v1/auth/resend-verification", Map.of("email", email), 202);
+        }
+        MvcResult blocked = perform("POST", null, "/api/v1/auth/resend-verification", Map.of("email", email));
+        assertError(parse(blocked, 429), 429, "TOO_MANY_EMAIL_VERIFICATION_REQUESTS");
+        assertThat(blocked.getResponse().getHeader("Retry-After")).isNotBlank();
     }
 
     @Test

@@ -22,6 +22,7 @@ public class User {
     private String email;
     private String passwordHash;
     private boolean active;
+    private boolean emailVerified;
     /** Se incrementa para invalidar todos los JWT emitidos antes. */
     private int tokenVersion;
     @Builder.Default
@@ -36,6 +37,10 @@ public class User {
 
     public void revokeTokens() {
         this.tokenVersion++;
+    }
+
+    public void markEmailVerified() {
+        this.emailVerified = true;
     }
 
     public void changePasswordHash(String newHash) {

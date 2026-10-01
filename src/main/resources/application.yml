@@ -29,14 +29,6 @@ spring:
     multipart:
       max-file-size: 60MB
       max-request-size: 60MB
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:25}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
-    properties:
-      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
-      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -67,6 +59,11 @@ edusistem:
       # bruta del código de 6 dígitos a ~10 intentos al día por cuenta.
       reset-code-per-email: { max: 10, window-minutes: 1440 }
       reset-code-per-ip: { max: 50, window-minutes: 15 }
+      resend-verification-per-email: { max: 3, window-minutes: 60 }
+      resend-verification-per-ip: { max: 20, window-minutes: 60 }
+      # Verificaciones del código de verificación de correo; mismo razonamiento que reset-code-*.
+      verify-email-per-email: { max: 10, window-minutes: 1440 }
+      verify-email-per-ip: { max: 50, window-minutes: 15 }
   cors:
     # Orígenes permitidos separados por coma (admite patrones: https://*.miapp.com). Vacío = CORS deshabilitado.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:}
@@ -88,9 +85,16 @@ edusistem:
     retention-days: ${AUDIT_RETENTION_DAYS:730}
     anonymous-retention-days: ${AUDIT_ANONYMOUS_RETENTION_DAYS:30}
   mail:
+    # Con false no se envía ningún correo (los códigos no llegan). Con true, RESEND_API_KEY y RESEND_FROM son
+    # obligatorios o la app no arranca.
     enabled: ${MAIL_ENABLED:false}
-    from: ${MAIL_FROM:no-reply@edusistem.local}
+    resend:
+      api-key: ${RESEND_API_KEY:}
+      from: ${RESEND_FROM:}
   password-reset:
+    code-ttl-minutes: 15
+    max-attempts: 5
+  email-verification:
     code-ttl-minutes: 15
     max-attempts: 5
   omr:
@@ -118,9 +122,6 @@ springdoc:
     path: /v3/api-docs
 
 management:
-  health:
-    mail:
-      enabled: false
   endpoints:
     web:
       exposure:

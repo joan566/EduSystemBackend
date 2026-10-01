@@ -6,10 +6,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public record UserResponse(Long id, String firstName, String lastName, String email, boolean active,
-                           List<String> roles, LocalDateTime createdAt) {
+                           boolean emailVerified, List<String> roles, LocalDateTime createdAt) {
 
     public static UserResponse from(User user) {
         return new UserResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getEmail(),
-                user.isActive(), user.getRoles().stream().map(RoleName::name).sorted().toList(), user.getCreatedAt());
+                user.isActive(), user.isEmailVerified(),
+                user.getRoles().stream().map(RoleName::name).sorted().toList(), user.getCreatedAt());
     }
 }

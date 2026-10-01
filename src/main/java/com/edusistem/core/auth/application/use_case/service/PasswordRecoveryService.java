@@ -4,6 +4,7 @@ import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.auth.application.use_case.dtos.AuthCommands;
 import com.edusistem.core.auth.domain.entity.PasswordResetToken;
+import com.edusistem.core.auth.domain.enums.OneTimeCodePurpose;
 import com.edusistem.core.auth.domain.inputports.PasswordRecoveryUseCase;
 import com.edusistem.core.auth.domain.outputports.MailSenderPort;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
@@ -114,7 +115,7 @@ public class PasswordRecoveryService implements PasswordRecoveryUseCase {
         InvalidRequestException invalid = new InvalidRequestException("INVALID_RESET_CODE",
                 "The code is invalid or has expired");
         Optional<User> user = users.findByEmail(email).filter(User::isActive);
-        Optional<PasswordResetToken> token = user.flatMap(u -> tokens.findLatestByUserId(u.getId()))
+        Optional<PasswordResetToken> token = user.flatMap(u -> tokens.findLatestByUserId(u.getId(), OneTimeCodePurpose.PASSWORD_RESET))
                 .filter(t -> t.isUsable(LocalDateTime.now(clock), maxAttempts));
         if (token.isEmpty()) {
             hasher.matches(code, dummyHash); // mismo coste que una verificación real

@@ -44,8 +44,9 @@ Los tests no usan `.env`: fijan sus propios valores y siempre desactivan el corr
 | `SCHOOL_TIMEZONE` | no (`America/Bogota`) | Zona horaria IANA del colegio; define qué día es "hoy" en `/schedule/today` y el `serverTime` de la agenda |
 | `APP_LATEST_VERSION` | no (`1.0.0`) | Última versión publicada de la app móvil (X.Y.Z), expuesta en `GET /api/v1/app/version` |
 | `APP_MINIMUM_VERSION` | no (`1.0.0`) | Versión mínima permitida; por debajo la actualización es obligatoria. Inválida o mayor que la última = la app no arranca |
-| `MAIL_ENABLED` | no (`false`) | Si es `true` envía el código de recuperación por SMTP |
-| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | solo con correo | SMTP |
+| `MAIL_ENABLED` | no (`false`) | Si es `true` envía por [Resend](https://resend.com) los códigos de verificación de correo y de recuperación de contraseña. Con `false` no se envía nada (las cuentas nuevas no pueden verificarse) |
+| `RESEND_API_KEY` | solo con correo | API key de Resend (`re_...`). Si falta con `MAIL_ENABLED=true`, la app no arranca |
+| `RESEND_FROM` | solo con correo | Remitente, de un dominio verificado en Resend: `EduSistem <no-reply@tudominio.com>`. Para pruebas sirve `onboarding@resend.dev` (solo entrega al correo de tu cuenta de Resend) |
 | `SERVER_PORT` | no (`8080`) | Puerto HTTP |
 
 Umbrales del lector de hojas (`application.yml`, `edusistem.omr.*`): `review-confidence-threshold` (0.90), `mark-threshold` (0.45), `ambiguity-threshold` (0.20).
@@ -87,7 +88,7 @@ lanzamiento van en migraciones nuevas (`V10__...`); nunca se editan las ya publi
 
 | Área | Endpoints |
 |---|---|
-| Auth | `POST /auth/register` · `/auth/login` · `/auth/refresh` · `/auth/logout` · `GET /auth/me` · `POST /auth/change-password` · `/auth/forgot-password` · `/auth/verify-code` · `/auth/reset-password` |
+| Auth | `POST /auth/register` · `/auth/verify-email` · `/auth/resend-verification` · `/auth/login` · `/auth/refresh` · `/auth/logout` · `GET /auth/me` · `POST /auth/change-password` · `/auth/forgot-password` · `/auth/verify-code` · `/auth/reset-password` |
 | Usuario | `GET/PUT /users/me` |
 | Académico | CRUD `/grades`, `/groups`, `/subjects`, `/academic-periods` · `/teaching-assignments` (POST, GET, GET id, `PATCH /{id}/active`, DELETE) · `/teaching-periods` (POST, GET, GET id, DELETE; incluye `studentCount`) |
 | Horario | `/teaching-periods/{id}/schedules` (GET, POST) · `/teaching-periods/{id}/schedules/{scheduleId}` (PUT, DELETE; 409 `SCHEDULE_CONFLICT` si el profesor ya tiene clase a esa hora) · `GET /schedule/today?date=` (clases del día ordenadas por hora + `serverTime` y `timezone` del colegio) · `GET /schedule?from=&to=` (día por día, máx. 93 días) |
@@ -148,7 +149,7 @@ Errores: `{timestamp, status, code, message, path[, errors]}` (sin trazas).
 * **Un examen por (examen, estudiante)**: reenviar una hoja ya procesada exige `replace=true`; una `FAILED` se puede reintentar directamente.
 * **Transacciones**: procesar una hoja (submission + respuestas + resultado) y la aplicación de una importación son una unidad; un fallo de lectura no propaga error, deja la submission `FAILED`. Las auditorías de fallo se guardan en transacción independiente para sobrevivir al rollback.
 * **Sesiones**: access token JWT (HS256, 1 h) + refresh token opaco y rotativo (30 días, solo se guarda su SHA-256). Cada petición valida contra la base que el usuario siga activo y que `users.token_version` coincida con el del token; `logout`, cambio de contraseña, restablecimiento y reuso de un refresh token ya rotado incrementan la versión y revocan todo (todos los dispositivos). Un usuario desactivado pierde acceso de inmediato. `POST /auth/change-password` devuelve una sesión nueva para el dispositivo actual.
-* **Fuerza bruta**: 5 logins fallidos por correo (50 por IP) en 15 min → `429 TOO_MANY_LOGIN_ATTEMPTS` con `Retry-After`. Además (`edusistem.security.rate-limits`): registro 10/h por IP (`TOO_MANY_REGISTRATIONS`); `forgot-password` 3/h por correo y 20/h por IP; verificar/usar códigos 10/día por correo y 50/15 min por IP (`TOO_MANY_PASSWORD_RESET_REQUESTS`). Los límites por correo se aplican exista o no la cuenta. Los contadores se guardan en `rate_limit_events` (comunes a todas las instancias, sobreviven a reinicios; `pg_advisory_xact_lock` por clave hace atómico comprobar y registrar, y cada evento se guarda en su propia transacción para que cuente aunque la petición falle) y usan la IP de la conexión: detrás de un proxy inverso pon `FORWARD_HEADERS_STRATEGY=native` (sin proxy, déjalo en `none` o un cliente podría falsear su IP con `X-Forwarded-For`).
+* **Fuerza bruta**: 5 logins fallidos por correo (50 por IP) en 15 min → `429 TOO_MANY_LOGIN_ATTEMPTS` con `Retry-After`. Además (`edusistem.security.rate-limits`): registro 10/h por IP (`TOO_MANY_REGISTRATIONS`); `forgot-password` 3/h por correo y 20/h por IP; verificar/usar códigos 10/día por correo y 50/15 min por IP (`TOO_MANY_PASSWORD_RESET_REQUESTS`); `resend-verification` 3/h por correo y 20/h por IP, `verify-email` 10/día por correo y 50/15 min por IP (`TOO_MANY_EMAIL_VERIFICATION_REQUESTS`). Los límites por correo se aplican exista o no la cuenta. Los contadores se guardan en `rate_limit_events` (comunes a todas las instancias, sobreviven a reinicios; `pg_advisory_xact_lock` por clave hace atómico comprobar y registrar, y cada evento se guarda en su propia transacción para que cuente aunque la petición falle) y usan la IP de la conexión: detrás de un proxy inverso pon `FORWARD_HEADERS_STRATEGY=native` (sin proxy, déjalo en `none` o un cliente podría falsear su IP con `X-Forwarded-For`).
 * **Enumeración de cuentas**: el login compara siempre contra un hash BCrypt (uno de relleno si el correo no existe) y la recuperación hace el mismo trabajo exista o no la cuenta, con el correo enviado en segundo plano, para que el tiempo de respuesta no delate cuentas. El registro sí responde `EMAIL_ALREADY_REGISTERED` (inevitable sin verificación de correo previa); lo acota el límite por IP.
 * **Documentación OpenAPI** (`/swagger-ui.html`, `/v3/api-docs`): desactivada salvo `API_DOCS_ENABLED=true` (solo en desarrollo).
 * **Supresión de datos**: `DELETE /api/v1/students/{id}` elimina al estudiante con sus notas, asistencia, observaciones, hojas de respuesta (y sus fotos) y adjuntos, y sustituye su nombre, código e identificación en la auditoría por `[estudiante eliminado]`. `DELETE /api/v1/auth/account` (con la contraseña) elimina la cuenta y todos sus datos y archivos. Ninguno se puede deshacer.
@@ -160,6 +161,7 @@ Errores: `{timestamp, status, code, message, path[, errors]}` (sin trazas).
 * **Logs sin datos personales**: los logs usan ids; el driver de PostgreSQL no incluye el `DETAIL` de los errores (`logServerErrorDetail=false`, que contendría valores como correos) y una violación de integridad solo registra el nombre de la restricción.
 * **CORS**: solo los orígenes de `CORS_ALLOWED_ORIGINS`, sin cookies (Bearer). Expone `Content-Disposition` y `Retry-After` para las descargas y el 429.
 * Recuperación de contraseña: código de 6 dígitos guardado como hash BCrypt, 15 min de vigencia, 5 intentos; `forgot-password` responde igual exista o no el correo. Con `MAIL_ENABLED=false` no se envía nada ni se registra el código.
+* Verificación de correo: `register` crea la cuenta con `email_verified=false`, **no devuelve sesión** y envía un código con las mismas reglas que el de recuperación (misma tabla `password_reset_tokens`, columna `purpose`; uno no invalida al otro). `POST /auth/verify-email` lo consume; `resend-verification` genera uno nuevo e invalida el anterior (responde igual exista o no la cuenta). Con credenciales correctas pero correo sin verificar, `login` responde `403 EMAIL_NOT_VERIFIED`. Las cuentas anteriores a la migración V11 quedan verificadas.
 
 ## Pendientes / fuera de alcance del MVP
 
@@ -180,7 +182,8 @@ Lista de comprobación (la app avisa al arrancar de las que puede detectar):
 2. **HTTPS**: la app habla HTTP; ponla detrás de un proxy inverso (nginx, Caddy, balanceador) que termine TLS y
    redirija HTTP→HTTPS, con `FORWARD_HEADERS_STRATEGY=native`. El puerto de la app no debe ser accesible desde fuera.
 3. `API_DOCS_ENABLED=false`, `CORS_ALLOWED_ORIGINS` solo con los orígenes reales del frontend, `MAIL_ENABLED=true`
-   con un SMTP real (sin él no hay recuperación de contraseña).
+   con `RESEND_API_KEY` y `RESEND_FROM` de un dominio verificado en Resend (sin correo no hay verificación de cuentas
+   nuevas ni recuperación de contraseña).
 4. **Base de datos**: usuario propio sin privilegios de superusuario, sin acceso público a su puerto.
 5. **Backups** diarios y copia fuera del servidor (ver abajo); ensaya una restauración antes del lanzamiento.
 6. **Una sola instancia** por ahora. Los límites de peticiones ya son comunes (van en la base), pero `STORAGE_PATH`

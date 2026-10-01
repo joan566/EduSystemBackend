@@ -48,6 +48,14 @@ public final class AuthRequests {
             @NotBlank @Pattern(regexp = "\\d{6}", message = "must be a 6-digit code") String code) {
     }
 
+    public record VerifyEmailRequest(
+            @NotBlank @Email String email,
+            @NotBlank @Pattern(regexp = "\\d{6}", message = "must be a 6-digit code") String code) {
+    }
+
+    public record ResendVerificationRequest(@NotBlank @Email String email) {
+    }
+
     public record ResetPasswordRequest(
             @NotBlank @Email String email,
             @NotBlank @Pattern(regexp = "\\d{6}", message = "must be a 6-digit code") String code,

@@ -3,6 +3,7 @@ package com.edusistem.core.auth.infrastructure.config;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.auth.application.use_case.service.ChangePasswordService;
 import com.edusistem.core.auth.application.use_case.service.DeleteAccountService;
+import com.edusistem.core.auth.application.use_case.service.EmailVerificationService;
 import com.edusistem.core.auth.application.use_case.service.LoginService;
 import com.edusistem.core.auth.application.use_case.service.PasswordRecoveryService;
 import com.edusistem.core.auth.application.use_case.service.RefreshSessionService;
@@ -71,6 +72,21 @@ public class AuthBeanConfig {
     }
 
     @Bean
+    EmailVerificationService emailVerificationService(UserRepositoryPort users,
+                                                      PasswordResetTokenRepositoryPort tokens,
+                                                      PasswordHasherPort hasher, MailSenderPort mailSender,
+                                                      RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
+                                                      RateLimitProperties rateLimits, Clock clock,
+                                                      @Value("${edusistem.email-verification.code-ttl-minutes}") int ttlMinutes,
+                                                      @Value("${edusistem.email-verification.max-attempts}") int maxAttempts) {
+        var limits = new EmailVerificationService.Limits(rateLimits.resendVerificationPerEmail().toRateLimit(),
+                rateLimits.resendVerificationPerIp().toRateLimit(), rateLimits.verifyEmailPerEmail().toRateLimit(),
+                rateLimits.verifyEmailPerIp().toRateLimit());
+        return new EmailVerificationService(users, tokens, hasher, mailSender, audit, rateLimiter, limits, clock,
+                                            ttlMinutes, maxAttempts);
+    }
+
+    @Bean
     RefreshSessionService refreshSessionService(RefreshTokenRepositoryPort refreshTokens, UserRepositoryPort users,
                                                 SessionService sessions, RecordAuditUseCase audit, Clock clock) {
         return new RefreshSessionService(refreshTokens, users, sessions, audit, clock);
@@ -78,10 +94,10 @@ public class AuthBeanConfig {
 
     @Bean
     RegisterUserService registerUserService(UserRepositoryPort users, RoleRepositoryPort roles,
-                                            PasswordHasherPort hasher, SessionService sessions,
+                                            PasswordHasherPort hasher, EmailVerificationService emailVerification,
                                             RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
                                             RateLimitProperties rateLimits) {
-        return new RegisterUserService(users, roles, hasher, sessions, audit, rateLimiter,
+        return new RegisterUserService(users, roles, hasher, emailVerification, audit, rateLimiter,
                                        rateLimits.registerPerIp().toRateLimit());
     }
 }

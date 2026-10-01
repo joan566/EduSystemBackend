@@ -37,6 +37,9 @@ public class UserEntity extends AuditableEntity {
     @Column(nullable = false)
     private boolean active;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     @Column(name = "token_version", nullable = false)
     private int tokenVersion;
 }

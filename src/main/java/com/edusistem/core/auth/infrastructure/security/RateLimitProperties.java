@@ -9,7 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "edusistem.security.rate-limits")
 public record RateLimitProperties(Limit registerPerIp, Limit forgotPasswordPerEmail, Limit forgotPasswordPerIp,
-                                  Limit resetCodePerEmail, Limit resetCodePerIp) {
+                                  Limit resetCodePerEmail, Limit resetCodePerIp,
+                                  Limit resendVerificationPerEmail, Limit resendVerificationPerIp,
+                                  Limit verifyEmailPerEmail, Limit verifyEmailPerIp) {
 
     public record Limit(int max, int windowMinutes) {
 

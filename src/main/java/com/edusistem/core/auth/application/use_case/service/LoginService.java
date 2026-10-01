@@ -8,6 +8,7 @@ import com.edusistem.core.auth.domain.inputports.LoginUseCase;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.outputports.LoginAttemptPort;
 import com.edusistem.core.shared.application.transaction.UseCaseTransactional;
+import com.edusistem.core.shared.domain.exceptions.ForbiddenException;
 import com.edusistem.core.shared.domain.exceptions.TooManyRequestsException;
 import com.edusistem.core.shared.domain.exceptions.UnauthorizedException;
 import com.edusistem.core.user.domain.entity.User;
@@ -57,6 +58,11 @@ public class LoginService implements LoginUseCase {
         }
         User user = found.get();
         attempts.recordSuccess(email);
+        if (!user.isEmailVerified()) {
+            // Solo tras validar la contraseña, para no revelar el estado de cuentas ajenas.
+            audit.failure(user.getId(), AuditAction.LOGIN, "User", user.getId(), "email not verified");
+            throw new ForbiddenException("EMAIL_NOT_VERIFIED", "The email address has not been verified");
+        }
         audit.success(user.getId(), AuditAction.LOGIN, "User", user.getId(), null);
         return sessions.start(user);
     }

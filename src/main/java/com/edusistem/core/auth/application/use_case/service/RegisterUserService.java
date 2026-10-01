@@ -3,7 +3,6 @@ package com.edusistem.core.auth.application.use_case.service;
 import com.edusistem.core.audit.domain.enums.AuditAction;
 import com.edusistem.core.audit.domain.inputports.RecordAuditUseCase;
 import com.edusistem.core.auth.application.use_case.dtos.AuthCommands;
-import com.edusistem.core.auth.application.use_case.dtos.AuthResult;
 import com.edusistem.core.auth.domain.inputports.RegisterUserUseCase;
 import com.edusistem.core.auth.domain.outputports.PasswordHasherPort;
 import com.edusistem.core.auth.domain.outputports.RequestRateLimitPort;
@@ -26,18 +25,18 @@ public class RegisterUserService implements RegisterUserUseCase {
     private final UserRepositoryPort users;
     private final RoleRepositoryPort roles;
     private final PasswordHasherPort hasher;
-    private final SessionService sessions;
+    private final EmailVerificationService emailVerification;
     private final RecordAuditUseCase audit;
     private final RequestRateLimitPort rateLimiter;
     private final RateLimit perIpLimit;
 
     public RegisterUserService(UserRepositoryPort users, RoleRepositoryPort roles, PasswordHasherPort hasher,
-                               SessionService sessions, RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
+                               EmailVerificationService emailVerification, RecordAuditUseCase audit, RequestRateLimitPort rateLimiter,
                                RateLimit perIpLimit) {
         this.users = users;
         this.roles = roles;
         this.hasher = hasher;
-        this.sessions = sessions;
+        this.emailVerification = emailVerification;
         this.audit = audit;
         this.rateLimiter = rateLimiter;
         this.perIpLimit = perIpLimit;
@@ -45,7 +44,7 @@ public class RegisterUserService implements RegisterUserUseCase {
 
     @Override
     @UseCaseTransactional
-    public AuthResult register(AuthCommands.Register command) {
+    public User register(AuthCommands.Register command) {
         // Limita el alta masiva de cuentas y el sondeo de correos registrados (EMAIL_ALREADY_REGISTERED).
         long retryAfter = rateLimiter.tryConsume("register:ip:" + command.clientIp(), perIpLimit);
         if (retryAfter > 0) {
@@ -65,10 +64,12 @@ public class RegisterUserService implements RegisterUserUseCase {
                 .email(email)
                 .passwordHash(hasher.hash(command.password()))
                 .active(true)
+                .emailVerified(false)
                 .roles(EnumSet.of(teacher.getName()))
                 .build();
         User saved = users.save(user);
         audit.success(saved.getId(), AuditAction.CREATE, "User", saved.getId(), "account registered");
-        return sessions.start(saved);
+        emailVerification.sendCode(saved);
+        return saved;
     }
 }

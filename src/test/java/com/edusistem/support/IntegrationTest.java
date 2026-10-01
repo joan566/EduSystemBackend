@@ -88,8 +88,11 @@ public abstract class IntegrationTest {
 
     protected Teacher newTeacher() {
         String email = unique("teacher") + "@example.com";
-        JsonNode body = call("POST", null, "/api/v1/auth/register", Map.of("firstName", "Test", "lastName", "Teacher",
+        call("POST", null, "/api/v1/auth/register", Map.of("firstName", "Test", "lastName", "Teacher",
                 "email", email, "password", PASSWORD), 201);
+        // atajo: el flujo real con el código se prueba en AuthIntegrationTest
+        jdbc.update("update users set email_verified = true where email = ?", email);
+        JsonNode body = call("POST", null, "/api/v1/auth/login", Map.of("email", email, "password", PASSWORD), 200);
         return new Teacher(body.get("user").get("id").asLong(), email, body.get("accessToken").asText());
     }
 

@@ -22,4 +22,10 @@ public final class AuthCommands {
 
     public record ResetPassword(String email, String code, String newPassword, String clientIp) {
     }
+
+    public record VerifyEmail(String email, String code, String clientIp) {
+    }
+
+    public record ResendVerification(String email, String clientIp) {
+    }
 }

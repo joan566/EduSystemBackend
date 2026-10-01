@@ -1,6 +1,7 @@
 package com.edusistem.core.auth.infrastructure.adapter;
 
 import com.edusistem.core.auth.domain.entity.PasswordResetToken;
+import com.edusistem.core.auth.domain.enums.OneTimeCodePurpose;
 import com.edusistem.core.auth.domain.outputports.PasswordResetTokenRepositoryPort;
 import com.edusistem.core.auth.infrastructure.mapper.PasswordResetTokenMapper;
 import com.edusistem.core.auth.infrastructure.repository.SpringDataPasswordResetTokenRepository;
@@ -25,7 +26,7 @@ public class PasswordResetTokenRepositoryAdapter implements PasswordResetTokenRe
     }
 
     @Override
-    public Optional<PasswordResetToken> findLatestByUserId(Long userId) {
-        return repository.findFirstByUserIdOrderByCreatedAtDescIdDesc(userId).map(mapper::toDomain);
+    public Optional<PasswordResetToken> findLatestByUserId(Long userId, OneTimeCodePurpose purpose) {
+        return repository.findFirstByUserIdAndPurposeOrderByCreatedAtDescIdDesc(userId, purpose).map(mapper::toDomain);
     }
 }

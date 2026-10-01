@@ -1,5 +1,6 @@
 package com.edusistem.core.auth.infrastructure.repository;
 
+import com.edusistem.core.auth.domain.enums.OneTimeCodePurpose;
 import com.edusistem.core.auth.infrastructure.entity.PasswordResetTokenEntity;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -10,7 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface SpringDataPasswordResetTokenRepository extends JpaRepository<PasswordResetTokenEntity, Long> {
 
-    Optional<PasswordResetTokenEntity> findFirstByUserIdOrderByCreatedAtDescIdDesc(Long userId);
+    Optional<PasswordResetTokenEntity> findFirstByUserIdAndPurposeOrderByCreatedAtDescIdDesc(Long userId,
+                                                                                 OneTimeCodePurpose purpose);
 
     @Modifying
     @Query("delete from PasswordResetTokenEntity t where t.expiresAt < :limit")

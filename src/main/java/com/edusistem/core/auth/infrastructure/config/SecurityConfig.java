@@ -26,7 +26,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_AUTH = {
             "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/forgot-password",
-            "/api/v1/auth/verify-code", "/api/v1/auth/reset-password", "/api/v1/auth/refresh"};
+            "/api/v1/auth/verify-code", "/api/v1/auth/reset-password", "/api/v1/auth/refresh",
+            "/api/v1/auth/verify-email", "/api/v1/auth/resend-verification"};
 
     private static final String[] DOCS = {
             "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/actuator/health"};
